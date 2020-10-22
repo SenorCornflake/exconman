@@ -18,7 +18,7 @@ The extensions of the files are not decided yet.
 "exconman get <key>" get last value key was associated with.
 
 ## Features
-should be able to allow value to be a path, and then make the value the contents of that file.
-should be able to match two lines and replace whatever is in between.
-should be able to replace the line above or below the one containing the match
-should be able to allow user to allow changing all matches, the first match or the last match to the value associated with the key
+- should be able to allow value to be a path, and then make the value the contents of that file.
+- should be able to match two lines and replace whatever is in between.
+- should be able to replace the line above or below the one containing the match
+- should be able to allow user to allow changing all matches, the first match or the last match to the value associated with the key
