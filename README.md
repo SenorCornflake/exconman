@@ -12,10 +12,10 @@ The keyword above could be set to find the regex "bspc config normal_border_colo
 The extensions of the files are not decided yet.
 
 ## Basic CLI
-- "exconman set <key> <value>" should replace regex matches associated to key with value
-- "exconman list" should list all keys
-- "exconman load <file>" should load key/value pairs from a file
-- "exconman get <key>" get last value key was associated with.
+- `exconman set <key> <value>` should replace regex matches associated to key with value
+- `exconman list` should list all keys
+- `exconman load <file>` should load key/value pairs from a file
+- `exconman get <key>` get last value key was associated with.
 
 ## Features
 - should be able to allow value to be a path, and then make the value the contents of that file.
