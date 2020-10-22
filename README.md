@@ -6,16 +6,16 @@ The keywords should be changable from the command line, example: (exconman set b
 The keyword above could be set to find the regex "bspc config normal_border_color .+" and replace it with "bspc config normal_border_color "{{provided_value}}>""". "{{provided_value}}" will be replaced by the value associated with the keyword.
 
 ## File Locations
-The file storing the last values associated with the keywords with be located in .local/exconman/values (NOTE: This will not be necessary if I can find a way to get values from the application config file itself)
-The file storing the possible keywords and their settings such as the regex and the various settings related to the keywords with be located at .config/exconman/settings
+- The file storing the last values associated with the keywords with be located in .local/exconman/values (NOTE: This will not be necessary if I can find a way to get values from the application config file itself)
+- The file storing the possible keywords and their settings such as the regex and the various settings related to the keywords with be located at .config/exconman/settings
 
 The extensions of the files are not decided yet.
 
 ## Basic CLI
-"exconman set <key> <value>" should replace regex matches associated to key with value
-"exconman list" should list all keys
-"exconman load <file>" should load key/value pairs from a file
-"exconman get <key>" get last value key was associated with.
+- "exconman set <key> <value>" should replace regex matches associated to key with value
+- "exconman list" should list all keys
+- "exconman load <file>" should load key/value pairs from a file
+- "exconman get <key>" get last value key was associated with.
 
 ## Features
 - should be able to allow value to be a path, and then make the value the contents of that file.
