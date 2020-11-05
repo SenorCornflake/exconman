@@ -9,4 +9,4 @@ edition = "2018"
 [dependencies]
 structopt = "0.3.20"
 regex = "1.4.1"
-yaml-rust = "0.4.4"
+tilde-expand = "0.1.1"

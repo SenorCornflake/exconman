@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 use std::fs;
+use std::path::PathBuf;
+
+use crate::utilities;
 
 fn parse(contents: &str) -> Result<HashMap<String, String>, Vec<u32>> {
 
@@ -68,13 +71,15 @@ pub fn from_hash(hash: HashMap<String, String>) -> String {
 
 pub fn merge(mut settings: HashMap<String, String>, merge_with: HashMap<String, String>) -> HashMap<String, String>{
     for (key, value) in merge_with {
-        settings.insert(key, value);
+        if key != String::from("__NAME__") {
+            settings.insert(key, value);
+        }
     }
 
     return settings;
 }
 
-pub fn parse_file(file: &str) -> Result<HashMap<String, String>, ()> {
+pub fn parse_modifier(file: &str) -> Result<HashMap<String, String>, ()> {
     let file_contents = fs::read_to_string(file);
 
     if file_contents.is_err() {
@@ -88,7 +93,7 @@ pub fn parse_file(file: &str) -> Result<HashMap<String, String>, ()> {
     match parsed_contents {
         Err(errors) => {
             for line_number in errors {
-                eprintln!("Missing assignment symbol (=) on line {} in file \"{}\"", line_number, file);
+                eprintln!("Missing assignment symbol (\x1b[0;31m=\x1b[0m) on line \x1b[0;31m{}\x1b[0m in file \"\x1b[0;31m{}\x1b[0m\"", line_number, file);
             }
         }
         Ok(parsed) => {
@@ -99,12 +104,13 @@ pub fn parse_file(file: &str) -> Result<HashMap<String, String>, ()> {
     return Err(());
 }
 
-pub fn parse_registry(file: &str) {
+// Make the settings of a setting accessible from a HashMap by it's name
+pub fn parse_registry(file: &str) -> Result<HashMap<String, HashMap<String, String>>, ()> {
     let file_contents = fs::read_to_string(file);
 
     if file_contents.is_err() {
         eprintln!("Error reading {}", file);
-        return;
+        return Err(());
     }
     
     let file_contents = file_contents.unwrap();
@@ -132,7 +138,7 @@ pub fn parse_registry(file: &str) {
             sections.push(file_contents[*indicator + 1..section_indicators[i + 1]].to_vec().join("\n"));
         }
     }
-    
+
     let mut parsed_registry: HashMap<String, HashMap<String, String>> = HashMap::new();
 
     for (i, s) in sections.iter().enumerate() {
@@ -141,22 +147,36 @@ pub fn parse_registry(file: &str) {
         match s {
             Err(errors) => {
                 for line_number in errors {
-                    println!("Missing assignment symbol (=) in line {}", (line_number + section_indicators[i] as u32) + 2);
+                    println!("Missing assignment symbol (\x1b[0;31m=\x1b[0m) on line \x1b[0;31m{}\x1b[0m in the registry", (line_number + section_indicators[i] as u32) + 2);
                 }
             }
             Ok(setting) => {
-                let result = evaluate_setting(setting, section_indicators[i] + 1);
+                let setting = check_setting(setting, section_indicators[i] + 1);
 
-                if result.is_ok() {
-                    println!("{:#?}", result.unwrap());
+                if setting.is_ok() {
+                    let mut parsed_setting: HashMap<String, String> = HashMap::new();
+
+                    let setting = setting.unwrap();
+                    
+                    for (key, value) in &setting {
+                        if key.to_string() != String::from("name") {
+                            parsed_setting.insert(key.to_string(), value.to_string());
+                        }
+                    }
+
+                    parsed_registry.insert(setting.get("name").unwrap().to_string(), parsed_setting);
+                } else {
+                    return Err(());
                 }
             }
         }
     }
+
+    return Ok(parsed_registry);
 }
 
-// Check if a setting's attributes are correct
-fn evaluate_setting(setting: HashMap<String, String>, setting_location: usize) -> Result<HashMap<String, String>, ()> {
+// Check if a setting's registry attributes are correct
+fn check_setting(setting: HashMap<String, String>, setting_location: usize) -> Result<HashMap<String, String>, ()> {
     let required_attributes = vec![
         "name",
         "file",
@@ -202,6 +222,7 @@ fn evaluate_setting(setting: HashMap<String, String>, setting_location: usize) -
             }
         }
         "text" => {}
+        "file" => {}
         _ => {
             eprintln!("Invalid value for \"\x1b[0;31mvalue_type\x1b[0m\" attribute in setting located at line \x1b[0;31m{}\x1b[0m", setting_location);
             error = true;
@@ -247,4 +268,43 @@ fn evaluate_setting(setting: HashMap<String, String>, setting_location: usize) -
     }
 
     return Ok(setting);
+}
+
+// Check if a modifer contains any errors
+pub fn check_modifier(modifier: HashMap<String, String>, modifier_path: &str, registry: &HashMap<String, HashMap<String, String>>) -> Result<HashMap<String, String>, ()> {
+    let mut errors: Vec<String> = Vec::new();
+
+    if modifier.get("__NAME__").is_none() {
+        errors.push(format!("Required meta setting \"\x1b[0;31m__NAME__\x1b[0m\" not found in modifier \"\x1b[0;31m{}\x1b[0m\"", modifier_path));
+    }
+
+    for (key, value) in &modifier {
+        let key = key.as_str();
+        let value = value.as_str();
+
+
+        let setting_registry = registry.get(key);
+
+        if setting_registry.is_none() && key != "__NAME__" {
+            errors.push(format!("Unregistered setting \"\x1b[0;31m{}\x1b[0m\" in modifier \"\x1b[0;31m{}\x1b[0m\"", key, modifier_path));
+        } else if key != "__NAME__" {
+            let setting_registry = setting_registry.unwrap();
+
+            if setting_registry.get("value_type").unwrap() == "file" {
+                if !PathBuf::from(utilities::expand_home(value)).exists() {
+                    errors.push(format!("File path does not exist for setting \"\x1b[0;31m{}\x1b[0m\" in modifier \"\x1b[0;31m{}\x1b[0m\"", modifier_path, key));
+                } else if PathBuf::from(utilities::expand_home(value)).is_dir() {
+                    errors.push(format!("File path is a directory for setting \"\x1b[0;31m{}\x1b[0m\" used by modifier \"\x1b[0;31m{}\x1b[0m\"", modifier_path, key));
+                }
+            }
+        }
+    }
+
+    if errors.len() > 0 {
+        for error in errors {
+            eprintln!("{}", error);
+        }
+        return Err(());
+    }
+  return Ok(modifier);
 }
