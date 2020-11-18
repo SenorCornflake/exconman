@@ -1,5 +1,5 @@
 use std::fs;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 mod registry;
@@ -8,6 +8,7 @@ mod config;
 mod utilities;
 
 use structopt::StructOpt;
+use serde::Serialize;
 
 use registry as reg;
 use modifier as modif;
@@ -15,7 +16,7 @@ use config as conf;
 
 const CONFIG_PATH: &str = "~/.config/exconman/config.json";
 
-fn load_registry(path: &str) -> Result<HashMap<String, reg::Setting>, ()> {
+fn load_registry(path: &str) -> Result<BTreeMap<String, reg::Setting>, ()> {
     let registry = fs::read_to_string(path);
 
     if registry.is_err() {
@@ -84,7 +85,7 @@ fn load_registry(path: &str) -> Result<HashMap<String, reg::Setting>, ()> {
     return Ok(registry);
 }
 
-fn load_modifier(path: &str, registry: &HashMap<String, reg::Setting>) -> Result<HashMap<String, modif::ValueType>, ()> {
+fn load_modifier(path: &str, registry: &BTreeMap<String, reg::Setting>) -> Result<BTreeMap<String, modif::ValueType>, ()> {
     let modifier = fs::read_to_string(path);
 
     if modifier.is_err() {
@@ -208,7 +209,7 @@ fn load_config(path: &str) -> Result<conf::Config, ()> {
     return Ok(config);
 }
 
-pub fn start_replacing(modifier: &HashMap<String, modif::ValueType>, registry: &HashMap<String, reg::Setting>, modifier_path: &str, registry_path: &str) {
+pub fn start_replacing(modifier: &BTreeMap<String, modif::ValueType>, registry: &BTreeMap<String, reg::Setting>, modifier_path: &str, registry_path: &str) {
     for (modifier_setting_name, modifier_setting_value) in modifier {
         if modifier_setting_name.as_str() != "__NAME__" {
             let registry_setting_attributes = registry.get(modifier_setting_name).unwrap();
@@ -540,7 +541,12 @@ fn main () {
                         }
                     }
                     
-                    let modifier = serde_json::to_string(&modifier).unwrap();
+                    let buf = Vec::new();
+                    let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+                    let mut ser = serde_json::Serializer::with_formatter(buf, formatter);
+                    let modifier = modifier.serialize(&mut ser).unwrap();
+
+                    let modifier = String::from_utf8(ser.into_inner()).unwrap();
 
                     match fs::write(path, modifier) {
                         _ => {}
@@ -567,6 +573,17 @@ fn main () {
                             let error = format!("Config does not contain setting <|R|>\"{}\"<|N|>", setting);
                             utilities::color(error);
                         }
+                    }
+
+                    let buf = Vec::new();
+                    let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+                    let mut ser = serde_json::Serializer::with_formatter(buf, formatter);
+                    let config = config.serialize(&mut ser).unwrap();
+
+                    let config = String::from_utf8(ser.into_inner()).unwrap();
+
+                    match fs::write(utilities::expand_home(CONFIG_PATH), config) {
+                        _ => {}
                     }
                 }
             }   

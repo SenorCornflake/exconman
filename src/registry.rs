@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use serde_derive::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -39,7 +39,7 @@ pub struct Setting {
     pub match_type: MatchType
 }
 
-pub fn from_json(json: &str) -> Result<HashMap<String, Setting>, serde_json::Error> {
-    let registry: Result<HashMap<String, Setting>, serde_json::Error> = serde_json::from_str(json);
+pub fn from_json(json: &str) -> Result<BTreeMap<String, Setting>, serde_json::Error> {
+    let registry: Result<BTreeMap<String, Setting>, serde_json::Error> = serde_json::from_str(json);
     return registry;
 }
