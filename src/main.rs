@@ -5,7 +5,6 @@ use std::path::PathBuf;
 mod registry;
 mod modifier;
 mod config;
-mod error;
 mod utilities;
 
 use structopt::StructOpt;
@@ -14,13 +13,13 @@ use registry as reg;
 use modifier as modif;
 use config as conf;
 
-const CONFIG_PATH: &str = "config.json";
+const CONFIG_PATH: &str = "~/.config/exconman/config.json";
 
 fn load_registry(path: &str) -> Result<HashMap<String, reg::Setting>, ()> {
     let registry = fs::read_to_string(path);
 
     if registry.is_err() {
-        let error = format!("<|Y|>{}<|N|>: Error reading file <|M|>-- REGISTRY ERROR<|N|>", path);
+        let error = format!("Error reading registry file <|R|>\"{}\"<|N|> <|M|>-- REGISTRY ERROR<|N|>", path);
         utilities::color(error);
 
         return Err(());
@@ -36,7 +35,7 @@ fn load_registry(path: &str) -> Result<HashMap<String, reg::Setting>, ()> {
         let error = error.replace(" \"", " \"<|R|>");
         let error = error.replace("\" ", "<|N|>\" ");
         let error = error.replace("\",", "<|N|>\",");
-        let error = format!("<|Y|>{}<|N|>: {} <|M|>-- REGISTRY ERROR<|N|>", path, error);
+        let error = format!("Registry <|Y|>\"{}\"<|N|> json error: {} <|M|><|N|>", path, error);
         utilities::color(error);
 
         return Err(());
@@ -89,7 +88,7 @@ fn load_modifier(path: &str, registry: &HashMap<String, reg::Setting>) -> Result
     let modifier = fs::read_to_string(path);
 
     if modifier.is_err() {
-        let error = format!("<|Y|>{}<|N|>: Error reading file <|M|>-- MODIFIER ERROR<|N|>", path);
+        let error = format!("Error reading modifier <|R|>\"{}\"<|N|>", path);
         utilities::color(error);
 
         return Err(());
@@ -105,7 +104,7 @@ fn load_modifier(path: &str, registry: &HashMap<String, reg::Setting>) -> Result
         let error = error.replace(" \"", " \"<|R|>");
         let error = error.replace("\" ", "<|N|>\" ");
         let error = error.replace("\",", "<|N|>\",");
-        let error = format!("<|Y|>{}<|N|>: {} <|M|>-- MODIFIER ERROR<|N|>", path, error);
+        let error = format!("<|Y|>{}<|N|>: {}", path, error);
         utilities::color(error);
 
         return Err(());
@@ -114,7 +113,7 @@ fn load_modifier(path: &str, registry: &HashMap<String, reg::Setting>) -> Result
     let modifier = modifier.unwrap();
 
     if modifier.get("__NAME__").is_none() {
-        let error = format!("<|Y|>{}<|N|>: Required setting <|R|>\"__NAME__\"<|N|> not found <|M|>-- MODIFIER ERROR<|N|>", path);
+        let error = format!("<|Y|>{}<|N|>: Required setting <|R|>\"__NAME__\"<|N|> not found", path);
         utilities::color(error);
 
         return Err(());
@@ -122,7 +121,7 @@ fn load_modifier(path: &str, registry: &HashMap<String, reg::Setting>) -> Result
 
     for (name, value) in &modifier {
         if registry.get(name).is_none() && name.as_str() != "__NAME__" {
-            let error = format!("<|Y|>{}<|N|>: Unregistered setting <|R|>\"{}\"<|N|> <|M|>-- MODIFIER ERROR<|N|>", path, name);
+            let error = format!("<|Y|>{}<|N|>: Unregistered setting <|R|>\"{}\"<|N|>", path, name);
             utilities::color(error);
 
             return Err(());
@@ -134,7 +133,7 @@ fn load_modifier(path: &str, registry: &HashMap<String, reg::Setting>) -> Result
             match value {
                 modif::ValueType::Bool(_) => {
                     if registered_value_type != &reg::ValueType::Bool {
-                        let error = format!("<|Y|>{}<|N|>: Setting <|R|>\"{}\"<|N|> has boolean value but requires a string <|M|>-- MODIFIER ERROR<|N|>", path, name);
+                        let error = format!("<|Y|>{}<|N|>: Setting <|R|>\"{}\"<|N|> has boolean value but requires a string", path, name);
                         utilities::color(error);
 
                         return Err(());
@@ -142,7 +141,7 @@ fn load_modifier(path: &str, registry: &HashMap<String, reg::Setting>) -> Result
                 }
                 modif::ValueType::String(value) => {
                     if registered_value_type == &reg::ValueType::Bool {
-                        let error = format!("<|Y|>{}<|N|>: Setting <|R|>\"{}\"<|N|> has string value but requires a boolean <|M|>-- MODIFIER ERROR<|N|>", path, name);
+                        let error = format!("<|Y|>{}<|N|>: Setting <|R|>\"{}\"<|N|> has string value but requires a boolean", path, name);
                         utilities::color(error);
 
                         return Err(());
@@ -152,12 +151,12 @@ fn load_modifier(path: &str, registry: &HashMap<String, reg::Setting>) -> Result
                     // directory
                     if registered_value_type == &reg::ValueType::File {
                         if !PathBuf::from(utilities::expand_home(value)).exists() {
-                            let error = format!("<|Y|>{}<|N|>: The path <|R|>\"{}\"<|N|> provided for setting <|R|>\"{}\"<|N|> does not exist <|M|>-- MODIFIER ERROR<|N|>", path, value, name);
+                            let error = format!("<|Y|>{}<|N|>: The path <|R|>\"{}\"<|N|> provided for setting <|R|>\"{}\"<|N|> does not exist", path, value, name);
                             utilities::color(error);
 
                             return Err(());
                         } else if PathBuf::from(utilities::expand_home(value)).is_dir() {
-                            let error = format!("<|Y|>{}<|N|>: The path <|R|>\"{}\"<|N|> provided for setting <|R|>\"{}\"<|N|> is a directory <|M|>-- MODIFIER ERROR<|N|>", path, value, name);
+                            let error = format!("<|Y|>{}<|N|>: The path <|R|>\"{}\"<|N|> provided for setting <|R|>\"{}\"<|N|> is a directory", path, value, name);
                             utilities::color(error);
 
                             return Err(());
@@ -175,7 +174,7 @@ fn load_config(path: &str) -> Result<conf::Config, ()> {
     let config = fs::read_to_string(path);
 
     if config.is_err() {
-        let error = format!("<|Y|>{}<|N|>: Error reading file <|M|>-- CONFIG ERROR<|N|>", path);
+        let error = format!("Error reading config file <|Y|>\"{}\"<|N|>", path);
         utilities::color(error);
 
         return Err(());
@@ -191,7 +190,7 @@ fn load_config(path: &str) -> Result<conf::Config, ()> {
         let error = error.replace(" \"", " \"<|R|>");
         let error = error.replace("\" ", "<|N|>\" ");
         let error = error.replace("\",", "<|N|>\",");
-        let error = format!("<|Y|>{}<|N|>: {} <|M|>-- CONFIG ERROR<|N|>", path, error);
+        let error = format!("<|Y|>{}<|N|>: {}", path, error);
         utilities::color(error);
 
         return Err(());
@@ -200,7 +199,7 @@ fn load_config(path: &str) -> Result<conf::Config, ()> {
     let config = config.unwrap();
 
     if config.modifier.len() == 0 {
-        let error = format!("<|Y|>{}<|N|>: At least one modifier required <|M|>-- CONFIG ERROR<|N|>", path);
+        let error = format!("No modifiers specified in the configuration file");
         utilities::color(error);
 
         return Err(());
@@ -222,10 +221,10 @@ pub fn start_replacing(modifier: &HashMap<String, modif::ValueType>, registry: &
             }
             
             let file = file.unwrap();
-            let mut file: Vec<&str> = file
+            let mut file: Vec<String> = file
                 .split("\n")
-                .collect::<Vec<&str>>();
-            let mut replace_line = String::new();
+                .map(|s| s.to_string())
+                .collect();
             
             // Get the "replace_with" value ready
             let mut replace_with = String::new();
@@ -281,7 +280,7 @@ pub fn start_replacing(modifier: &HashMap<String, modif::ValueType>, registry: &
                     let mut second_line_match_index: Option<usize> = None;
 
                     if first_line_regex.is_err() || second_line_regex.is_err() {
-                        let error = format!("<|Y|>{}<|N|>: Invalid regex in <|R|>\"match_pattern\"<|N|> attribute for setting <|R|>\"{}\"<|N|> <|M|>-- REGISTRY ERROR<|N|>", registry_path, modifier_setting_name);
+                        let error = format!("The match pattern of setting <|R|>\"{}\"<|N|> in modifier <|R|>\"{}\"<|N|> contains invalid regex", registry_path, modifier_setting_name);
                         utilities::color(error);
 
                         continue;
@@ -293,7 +292,6 @@ pub fn start_replacing(modifier: &HashMap<String, modif::ValueType>, registry: &
                     for (i, line) in file.iter().enumerate() {
                         if first_line_regex.is_match(line) {
                             first_line_match_index = Some(i);
-                            break;
                         }
                     }
                     for (i, line) in file.iter().enumerate() {
@@ -304,7 +302,7 @@ pub fn start_replacing(modifier: &HashMap<String, modif::ValueType>, registry: &
                     }
 
                     if first_line_match_index.is_none() || second_line_match_index.is_none() {
-                        let error = format!("<|Y|>{}<|N|>: Match not found for setting <|R|>\"{}\"<|N|>", modifier_path, modifier_setting_name);
+                        let error = format!("Match not found for setting <|R|>\"{}\"<|N|>", modifier_setting_name);
                         utilities::color(error);
 
                         continue;
@@ -314,14 +312,14 @@ pub fn start_replacing(modifier: &HashMap<String, modif::ValueType>, registry: &
                     let second_line_match_index = second_line_match_index.unwrap();
 
                     if second_line_match_index <= first_line_match_index {
-                        let error = format!("<|Y|>{}<|N|>: Match for second line regex was found before or on the same line as the first line regex  <|R|>\"match_pattern\"<|N|> attribute for setting <|R|>\"{}\"<|N|> <|M|>-- REGISTRY ERROR<|N|>", registry_path, modifier_setting_name);
+                        let error = format!("The second line marking a region was found before the first, consider changing the regex pattern of the setting <|R|>\"{}\"<|N|>", modifier_setting_name);
                         utilities::color(error);
 
                         continue;
                     }
 
                     file.drain(first_line_match_index + 1..second_line_match_index);
-                    file.insert(first_line_match_index + 1, replace_with.as_str());
+                    file.insert(first_line_match_index + 1, replace_with);
                 }
                 reg::MatchType::Line => {
                     let line_regex: Result<regex::Regex, regex::Error> = regex::Regex::new(registry_setting_attributes.match_pattern.as_str());
@@ -334,36 +332,43 @@ pub fn start_replacing(modifier: &HashMap<String, modif::ValueType>, registry: &
                     }
 
                     let line_regex = line_regex.unwrap();
-                    let mut match_found = false;
+                    let mut matches: Vec<usize> = Vec::new();
 
-                    for (i, line) in file.iter().enumerate() {
+                    for (i, line) in file.iter_mut().enumerate() {
                         if line_regex.is_match(line) {
-                            replace_line = line_regex.replace_all(line, replace_with.as_str()).into_owned();
-
-                            match registry_setting_attributes.replace_line {
-                                reg::ReplaceLine::Matched => {
-                                    file[i] = replace_line.as_str();
-                                }
-                                reg::ReplaceLine::Above => {
-                                    if i == 0 {
-                                        let error = format!("<|Y|>{}<|N|>: No line to replace above the first line. Consider changing the <|R|>\"replace_line\"<|N|> attribute for setting <|R|>\"{}\"<|N|> <|M|>-- REGISTRY ERROR<|N|>", registry_path, modifier_setting_name);
-                                        utilities::color(error);
-
-                                        continue;
-                                    }
-                                    file[i - 1] = replace_line.as_str();
-                                }
-                                reg::ReplaceLine::Below => {
-                                    file[i + 1] = replace_line.as_str();
-                                }
-                            }
-
-                            match_found = true;
-                            break;
+                            matches.push(i);
                         }
                     }
 
-                    if !match_found {
+                    for i in &matches {
+                        let i = *i;
+
+                        match registry_setting_attributes.replace_line {
+                            reg::ReplaceLine::Matched => {
+                                let replace_line = line_regex.replace_all(file[i].as_str(), replace_with.as_str())
+                                    .into_owned();
+                                file[i] = replace_line;
+                            }
+                            reg::ReplaceLine::Above => {
+                                if i == 0 {
+                                    let error = format!("<|Y|>{}<|N|>: No line to replace above the first line. Consider changing the <|R|>\"replace_line\"<|N|> attribute for setting <|R|>\"{}\"<|N|> <|M|>-- REGISTRY ERROR<|N|>", registry_path, modifier_setting_name);
+                                    utilities::color(error);
+
+                                    continue;
+                                }
+                                let replace_line = line_regex.replace_all(file[i - 1].as_str(), replace_with.as_str())
+                                    .into_owned();
+                                file[i - 1] = replace_line;
+                            }
+                            reg::ReplaceLine::Below => {
+                                let replace_line = line_regex.replace_all(file[i + 1].as_str(), replace_with.as_str())
+                                    .into_owned();
+                                file[i + 1] = replace_line;
+                            }
+                        }
+                    }
+
+                    if matches.len() == 0 {
                         let error = format!("<|Y|>{}<|N|>: Match not found for setting <|R|>\"{}\"<|N|>", modifier_path, modifier_setting_name);
                         utilities::color(error);
                     }
@@ -371,7 +376,7 @@ pub fn start_replacing(modifier: &HashMap<String, modif::ValueType>, registry: &
                 }
             }
 
-            match fs::write(registry_setting_attributes.file.as_str(), file.join("\n")) {
+            match fs::write(utilities::expand_home(registry_setting_attributes.file.as_str()), file.join("\n")) {
                 _ => {}
             };
         }
@@ -385,6 +390,8 @@ fn main () {
     enum Args {
         /// Start replacing settings
         Start,
+        /// List all settings in the registry
+        List,
         /// Query a value
         Query(Query),
         /// Edit a value
@@ -563,6 +570,17 @@ fn main () {
                     }
                 }
             }   
+        }
+        Args::List => {
+            for (key, value) in registry {
+                let value_type = match value.value_type {
+                    reg::ValueType::File => "file",
+                    reg::ValueType::Bool => "bool",
+                    reg::ValueType::Text => "text"
+                };
+                let setting_signature = format!("<|G|>{}<|N|>: <|Y|>{}<|N|>", key, value_type);
+                utilities::color(setting_signature);
+            }
         }
     }
 }
