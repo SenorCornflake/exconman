@@ -1,2 +1,0 @@
-__NAME__ = Modifier
-lemon = "~/.config/bspwm/bspwmrc"
