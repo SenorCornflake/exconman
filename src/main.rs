@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use serde_derive::{Serialize, Deserialize};
 use serde_json;
 use structopt::StructOpt;
@@ -61,6 +59,10 @@ struct Get {
     setting_name: String
 }
 
+fn expand_home(path: &str) -> String {
+    return path.replace("~", std::env::var("HOME").unwrap().as_str())
+}
+
 fn get_setting(setting_name: String, registry: &Vec<Setting>) -> Option<&Setting> {
     for setting in registry {
         if setting.name == setting_name {
@@ -72,7 +74,7 @@ fn get_setting(setting_name: String, registry: &Vec<Setting>) -> Option<&Setting
 }
 
 fn validate_setting(setting: &Setting) -> Result<(), ()> {
-    let result = std::fs::read_to_string(&setting.file);
+    let result = std::fs::read_to_string(expand_home(&setting.file));
     
     if result.is_err() {
         eprintln!("\"{}\" | {}",setting.file, result.unwrap_err());
@@ -86,13 +88,14 @@ fn set(setting_name: String, value: String, stop_at_first_match: bool, registry:
     if setting.is_none() { return }
     let setting = setting.unwrap();
 
-    let file = std::fs::read_to_string(&setting.file).unwrap();
+    let file = std::fs::read_to_string(&expand_home(&setting.file)).unwrap();
     let file: Vec<&str> = file.split("\n")
         .collect();
     let file: Vec<String> = file.iter().map(|s| s.to_string()).collect();
     let mut modified_file = file.clone();
 
-    let mut replace_value = String::new();
+    #[allow(unused_mut)]
+    let mut replace_value;
 
     if setting.value_is_file {
         let result = std::fs::read_to_string(&value);
@@ -179,7 +182,7 @@ fn set(setting_name: String, value: String, stop_at_first_match: bool, registry:
     }
 
     let modified_file = modified_file.join("\n");
-    match std::fs::write(&setting.file, modified_file) { _ => {}}
+    match std::fs::write(expand_home(&setting.file), modified_file) { _ => {}}
 }
 
 fn get(setting_name: String, stop_at_first_match: bool, registry: &Vec<Setting>) {
@@ -187,13 +190,12 @@ fn get(setting_name: String, stop_at_first_match: bool, registry: &Vec<Setting>)
     if setting.is_none() { return }
     let setting = setting.unwrap();
 
-    let file = std::fs::read_to_string(&setting.file).unwrap();
+    let file = std::fs::read_to_string(expand_home(&setting.file)).unwrap();
     let file: Vec<&str> = file.split("\n")
         .collect();
-    let file: Vec<String> = file.iter().map(|s| s.to_string()).collect();
+    //let file: Vec<String> = file.iter().map(|s| s.to_string()).collect();
 
-    let mut text: Vec<&str> = Vec::new();
-    let mut temp: String = String::new();
+    let mut text: String = String::new();
 
     match &setting.pattern {
         Pattern::Region(region) => {
@@ -227,8 +229,7 @@ fn get(setting_name: String, stop_at_first_match: bool, registry: &Vec<Setting>)
 
             if region_start.is_none() || region_end.is_none() || region_end.unwrap() <= region_start.unwrap() { return }
 
-            temp = file[region_start.unwrap() + 1 .. region_end.unwrap()].join("\n");
-            text = temp.split("").collect();
+            text = file[region_start.unwrap() + 1 .. region_end.unwrap()].join("\n");
         },
         Pattern::Line(pattern) => {
             let regex = Regex::new(pattern.as_str());
@@ -243,22 +244,16 @@ fn get(setting_name: String, stop_at_first_match: bool, registry: &Vec<Setting>)
                     match &setting.replace_type {
                         ReplaceType::Above => {
                             if i != 0 {
-                                text = file[i - 1]
-                                    .split("")
-                                    .collect();
+                                text = file[i - 1].to_string();
                             }
                         }
                         ReplaceType::Below => {
                             if i != file.len() {
-                                text = file[i + 1]
-                                    .split("")
-                                    .collect();
+                                text = file[i + 1].to_string();
                             }
                         }
                         ReplaceType::Matched => {
-                            text = file[i]
-                                .split("")
-                                .collect();
+                            text = file[i].to_string();
                         }
                     }
                     if stop_at_first_match { break }
@@ -270,24 +265,66 @@ fn get(setting_name: String, stop_at_first_match: bool, registry: &Vec<Setting>)
 
     if text.len() == 0 { return }
 
-    // Here we remove the non-value text. For example, if the replace_value was "x = {value};",
-    // then "x = " and ";" will be removed because it's not part of the provided value
+    // Escape special characters
+    let regex = &setting.replace_value;
+    let regex = regex.replace("\\", "\\\\");
+    let regex = regex.replace("^", "\\^");
+    let regex = regex.replace("$", "\\$");
+    let regex = regex.replace("|", "\\|");
+    let regex = regex.replace("?", "\\?");
+    let regex = regex.replace(".", "\\.");
+    let regex = regex.replace("*", "\\*");
+    let regex = regex.replace("(", "\\(");
+    let regex = regex.replace(")", "\\)");
+    let regex = regex.replace("{value}", "(.|\n)*"); // Match all characters, even new lines
+    let regex = regex.replace("+", "\\+");
+    let regex = regex.replace("{", "\\{");
+    let regex = regex.replace("[", "\\[");
+    let regex = Regex::new(&regex);
+    if regex.is_err() {
+        eprintln!("Error compiling hardcoded (not your fault) regex for setting \"{}\"", setting.name);
+        return;
+    }
+    let regex = regex.unwrap();
+
+    let starting_index = regex.find(text.as_str());
+
+    if starting_index.is_none() {
+        eprintln!("An error ocurred while trying to get the value for \"{}\"", setting.name);
+        return
+    }
+    let starting_index = starting_index.unwrap().start();
+    
     let value_index = setting.replace_value.find("{value}");
     if value_index.is_none() { return }
+    let value_index = value_index.unwrap();
 
-    let value_prefix_len = setting.replace_value[0 .. value_index.unwrap()].len();
-    let value_suffix_len = setting.replace_value[value_index.unwrap() + "{value}".len() .. setting.replace_value.len()].len();
+    let value_suffix_len = setting.replace_value[value_index + "{value}".len()..].len();
+    
+    let mut text: Vec<&str> = text
+        .split("")
+        .collect();
+    
+    // The starting index marks the beginning of the text
+    // provided in the replace_value, for example, the replace_value might be "border_width = {value}",
+    // but in the file there might be a tab or spaces before it, therefore being "\tborder_width = {value}".
+    // The starting index is found by looking for what was given in the replace_value. That's what
+    // the regex being constructed above is for. Hope it's not too daunting!
+    //
+    // - Past me
 
-    for i in 0 .. value_prefix_len + 1 {
-        if i < text.len() {
-            text[i] = "";
-        }
+    // Remove characters before value
+    for i in 0 .. starting_index + value_index + 1 {
+        text[i] = "";
     }
-
-    for i in text.len() - value_suffix_len - 1 .. text.len() {
-        if i < text.len() {
+    
+    // Remove characters after the value (done using reverse loop)
+    let mut count = 0;
+    for i in (0 .. text.len()).rev() {
+        if count <= value_suffix_len {
             text[i] = "";
         }
+        count += 1;
     }
 
     println!("{}", text.join(""));
@@ -299,7 +336,7 @@ fn main() {
     let registry = args.registry;
     let stop_at_first_match = args.stop_at_first_match;
     
-    let registry = std::fs::read_to_string(registry);
+    let registry = std::fs::read_to_string(&expand_home(&registry));
 
     if registry.is_err() {
         eprintln!("{}", registry.unwrap_err());
