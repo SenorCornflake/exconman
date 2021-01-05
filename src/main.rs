@@ -98,7 +98,7 @@ fn set(setting_name: String, value: String, stop_at_first_match: bool, registry:
     let mut replace_value;
 
     if setting.value_is_file {
-        let result = std::fs::read_to_string(&value);
+        let result = std::fs::read_to_string(expand_home(&value));
 
         if result.is_err() {
             eprintln!("\"{}\" | {}", value, result.unwrap_err());
