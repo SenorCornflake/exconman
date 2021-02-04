@@ -13,6 +13,7 @@ enum ReplaceType {
     Matched
 }
 
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 enum Pattern {
@@ -34,7 +35,7 @@ struct Setting {
 struct Args {
     #[structopt(long, short)]
     /// Supply a registry to use
-    registry: String,
+    registry: Option<String>,
     #[structopt(long, short)]
     /// Stop searching once a match is found
     stop_at_first_match: bool,
@@ -60,7 +61,8 @@ struct Get {
 }
 
 fn expand_home(path: &str) -> String {
-    return path.replace("~", std::env::var("HOME").unwrap().as_str())
+    return path.replace("~", std::env::var("HOME").unwrap().as_str());
+
 }
 
 fn get_setting(setting_name: String, registry: &Vec<Setting>) -> Option<&Setting> {
@@ -332,14 +334,21 @@ fn get(setting_name: String, stop_at_first_match: bool, registry: &Vec<Setting>)
 
 fn main() {
     let args = Args::from_args();
+
     let subcommand = args.sub;
-    let registry = args.registry;
+    let registry_path = args.registry;
     let stop_at_first_match = args.stop_at_first_match;
+
+    let registry_path: String = if registry_path.is_some() {
+        registry_path.unwrap()
+    } else {
+        String::from("~/.config/exconman/registry.json")
+    };
     
-    let registry = std::fs::read_to_string(&expand_home(&registry));
+    let registry = std::fs::read_to_string(&expand_home(&registry_path));
 
     if registry.is_err() {
-        eprintln!("{}", registry.unwrap_err());
+        eprintln!("{} {}", registry_path, registry.unwrap_err());
         return;
     }
     
@@ -372,4 +381,5 @@ fn main() {
             set(setting_name, value, stop_at_first_match, &registry);
         }
     }
+
 }
