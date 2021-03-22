@@ -87,7 +87,7 @@ fn validate_setting(setting: &Setting) -> Result<(), ()> {
     let result = std::fs::metadata(expand_home(&setting.file));
     
     if result.is_err() {
-        eprintln!("\"{}\" | {}",setting.file, result.unwrap_err());
+        eprintln!("Registry error for setting \"{}\": \"{}\" | {}", setting.name, setting.file, result.unwrap_err());
         return Err(());
     }
     return Ok(());
