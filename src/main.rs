@@ -3,6 +3,8 @@ use serde_json;
 use structopt::StructOpt;
 use regex::Regex;
 
+use std::collections::HashMap;
+
 #[derive(Debug, Serialize, Deserialize)]
 enum ReplaceType {
     #[serde(rename = "above")]
@@ -47,6 +49,7 @@ struct Args {
 enum Subcommand {
     Set(Set),
     Get(Get),
+    Load(Load)
 }
 
 #[derive(StructOpt, Debug)]
@@ -58,6 +61,11 @@ struct Set {
 #[derive(StructOpt, Debug)]
 struct Get {
     setting_name: String
+}
+
+#[derive(StructOpt, Debug)]
+struct Load {
+    file: String
 }
 
 fn expand_home(path: &str) -> String {
@@ -76,7 +84,7 @@ fn get_setting(setting_name: String, registry: &Vec<Setting>) -> Option<&Setting
 }
 
 fn validate_setting(setting: &Setting) -> Result<(), ()> {
-    let result = std::fs::read_to_string(expand_home(&setting.file));
+    let result = std::fs::metadata(expand_home(&setting.file));
     
     if result.is_err() {
         eprintln!("\"{}\" | {}",setting.file, result.unwrap_err());
@@ -332,6 +340,31 @@ fn get(setting_name: String, stop_at_first_match: bool, registry: &Vec<Setting>)
     println!("{}", text.join(""));
 }
 
+fn load(file_name: String, stop_at_first_match: bool, registry: &Vec<Setting>) {
+    let settings = std::fs::read_to_string(&file_name);
+
+    if settings.is_err() {
+        eprintln!("\"{}\" | {}", file_name, settings.unwrap_err());
+        return;
+    }
+    
+    let settings: Result<HashMap<String, String>, serde_json::Error> = serde_json::from_str(&settings.unwrap());
+
+    if settings.is_err() {
+        eprintln!("\"{}\" | {}", file_name, settings.unwrap_err());
+        return;
+    }
+
+    let settings = settings.unwrap();
+
+    for (setting, value) in settings.iter() {
+        let setting = setting.as_str();
+        let value = value.as_str();
+
+        set(setting.to_string(), value.to_string(), stop_at_first_match, registry)
+    }
+}
+
 fn main() {
     let args = Args::from_args();
 
@@ -379,6 +412,9 @@ fn main() {
         }
         Subcommand::Set(Set { setting_name, value }) => {
             set(setting_name, value, stop_at_first_match, &registry);
+        }
+        Subcommand::Load(Load { file }) => {
+            load(file, stop_at_first_match, &registry);
         }
     }
 
