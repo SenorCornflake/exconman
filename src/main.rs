@@ -4,6 +4,7 @@ use structopt::StructOpt;
 use regex::Regex;
 
 use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Serialize, Deserialize)]
 enum ReplaceType {
@@ -28,7 +29,7 @@ struct Setting {
     name: String,
     file: String,
     pattern: Pattern,
-    replace_value: String,
+    substitute: String,
     replace_type: ReplaceType,
     value_is_file: bool
 }
@@ -47,9 +48,14 @@ struct Args {
 
 #[derive(StructOpt, Debug)]
 enum Subcommand {
+    /// Set the value of a setting
     Set(Set),
+    /// Get the value of a setting
     Get(Get),
-    Load(Load)
+    /// Load settings from a JSON file
+    Load(Load),
+    /// Print out all setting values in JSON format
+    Dump
 }
 
 #[derive(StructOpt, Debug)]
@@ -105,7 +111,7 @@ fn set(setting_name: String, value: String, stop_at_first_match: bool, registry:
     let mut modified_file = file.clone();
 
     #[allow(unused_mut)]
-    let mut replace_value;
+    let mut substitute;
 
     if setting.value_is_file {
         let result = std::fs::read_to_string(expand_home(&value));
@@ -116,12 +122,12 @@ fn set(setting_name: String, value: String, stop_at_first_match: bool, registry:
         }
 
         let result = result.unwrap();
-        replace_value = setting.replace_value.replace("{value}", result.as_str());
+        substitute = setting.substitute.replace("{value}", result.as_str());
     } else {
-        replace_value = setting.replace_value.replace("{value}", value.as_str());
+        substitute = setting.substitute.replace("{value}", value.as_str());
     }
 
-    let replace_value = replace_value.as_str();
+    let substitute = substitute.as_str();
 
     match &setting.pattern {
         Pattern::Region(region) => {
@@ -156,7 +162,7 @@ fn set(setting_name: String, value: String, stop_at_first_match: bool, registry:
             if region_start.is_none() || region_end.is_none() || region_end.unwrap() <= region_start.unwrap() { return }
 
             modified_file.drain(region_start.unwrap() + 1..region_end.unwrap());
-            modified_file.insert(region_start.unwrap() + 1, replace_value.to_string());
+            modified_file.insert(region_start.unwrap() + 1, substitute.to_string());
         },
         Pattern::Line(pattern) => {
             let regex = Regex::new(pattern.as_str());
@@ -172,16 +178,16 @@ fn set(setting_name: String, value: String, stop_at_first_match: bool, registry:
                     match &setting.replace_type {
                         ReplaceType::Above => {
                             if i != 0 {
-                                modified_file[i - 1] = replace_value.to_string();
+                                modified_file[i - 1] = substitute.to_string();
                             }
                         }
                         ReplaceType::Below => {
                             if i != file.len() {
-                                modified_file[i + 1] = replace_value.to_string();
+                                modified_file[i + 1] = substitute.to_string();
                             }
                         }
                         ReplaceType::Matched => {
-                            modified_file[i] = regex.replace_all(line, replace_value).to_string();
+                            modified_file[i] = regex.replace_all(line, substitute).to_string();
                         }
                     }
                     if stop_at_first_match { break }
@@ -195,9 +201,9 @@ fn set(setting_name: String, value: String, stop_at_first_match: bool, registry:
     match std::fs::write(expand_home(&setting.file), modified_file) { _ => {}}
 }
 
-fn get(setting_name: String, stop_at_first_match: bool, registry: &Vec<Setting>) {
+fn get(setting_name: String, stop_at_first_match: bool, print: bool, registry: &Vec<Setting>) -> Result<String, ()>{
     let setting = get_setting(setting_name, registry);
-    if setting.is_none() { return }
+    if setting.is_none() { return Err(()) }
     let setting = setting.unwrap();
 
     let file = std::fs::read_to_string(expand_home(&setting.file)).unwrap();
@@ -215,14 +221,14 @@ fn get(setting_name: String, stop_at_first_match: bool, registry: &Vec<Setting>)
             let regex1 = Regex::new(region[0].as_str());
             if regex1.is_err() {
                 eprintln!("Error compiling regex pattern for setting \"{}\"", setting.name);
-                return;
+                return Err(());
             }
             let regex1 = regex1.unwrap();
 
             let regex2 = Regex::new(region[1].as_str());
             if regex2.is_err() {
                 eprintln!("Error compiling regex pattern for setting \"{}\"", setting.name);
-                return;
+                return Err(());
             }
             let regex2 = regex2.unwrap();
 
@@ -237,7 +243,7 @@ fn get(setting_name: String, stop_at_first_match: bool, registry: &Vec<Setting>)
                 }
             }
 
-            if region_start.is_none() || region_end.is_none() || region_end.unwrap() <= region_start.unwrap() { return }
+            if region_start.is_none() || region_end.is_none() || region_end.unwrap() <= region_start.unwrap() { return Err(()) }
 
             text = file[region_start.unwrap() + 1 .. region_end.unwrap()].join("\n");
         },
@@ -245,7 +251,7 @@ fn get(setting_name: String, stop_at_first_match: bool, registry: &Vec<Setting>)
             let regex = Regex::new(pattern.as_str());
             if regex.is_err() {
                 eprintln!("Error compiling regex pattern for setting \"{}\"", setting.name);
-                return;
+                return Err(());
             }
             let regex = regex.unwrap();
 
@@ -273,10 +279,10 @@ fn get(setting_name: String, stop_at_first_match: bool, registry: &Vec<Setting>)
         }
     }
 
-    if text.len() == 0 { return }
+    if text.len() == 0 { return Err(()) }
 
     // Escape special characters
-    let regex = &setting.replace_value;
+    let regex = &setting.substitute;
     let regex = regex.replace("\\", "\\\\");
     let regex = regex.replace("^", "\\^");
     let regex = regex.replace("$", "\\$");
@@ -293,7 +299,7 @@ fn get(setting_name: String, stop_at_first_match: bool, registry: &Vec<Setting>)
     let regex = Regex::new(&regex);
     if regex.is_err() {
         eprintln!("Error compiling hardcoded (not your fault) regex for setting \"{}\"", setting.name);
-        return;
+        return Err(());
     }
     let regex = regex.unwrap();
 
@@ -301,25 +307,26 @@ fn get(setting_name: String, stop_at_first_match: bool, registry: &Vec<Setting>)
 
     if starting_index.is_none() {
         eprintln!("An error ocurred while trying to get the value for \"{}\"", setting.name);
-        return
+        return Err(());
     }
     let starting_index = starting_index.unwrap().start();
     
-    let value_index = setting.replace_value.find("{value}");
-    if value_index.is_none() { return }
+    let value_index = setting.substitute.find("{value}");
+    if value_index.is_none() { return Err(()) }
     let value_index = value_index.unwrap();
 
-    let value_suffix_len = setting.replace_value[value_index + "{value}".len()..].len();
+    let value_suffix_len = setting.substitute[value_index + "{value}".len()..].len();
     
     let mut text: Vec<&str> = text
         .split("")
         .collect();
     
     // The starting index marks the beginning of the text
-    // provided in the replace_value, for example, the replace_value might be "border_width = {value}",
+    // provided in the substitute, for example, the substitute might be "border_width = {value}",
     // but in the file there might be a tab or spaces before it, therefore being "\tborder_width = {value}".
-    // The starting index is found by looking for what was given in the replace_value. That's what
-    // the regex being constructed above is for. Hope it's not too daunting!
+    // Replacing
+    // The starting index is found by looking for what was given in the substitute. That's what
+    // the regex being constructed above is for.
     //
     // - Past me
 
@@ -337,7 +344,11 @@ fn get(setting_name: String, stop_at_first_match: bool, registry: &Vec<Setting>)
         count += 1;
     }
 
-    println!("{}", text.join(""));
+    if print {
+        println!("{}", text.join(""));
+    }
+
+    return Ok(text.join(""))
 }
 
 fn load(file_name: String, stop_at_first_match: bool, registry: &Vec<Setting>) {
@@ -408,7 +419,9 @@ fn main() {
 
     match subcommand {
         Subcommand::Get(Get { setting_name }) => {
-            get(setting_name, stop_at_first_match, &registry);
+            match get(setting_name, stop_at_first_match, true, &registry) {
+                _ => {}
+            };
         }
         Subcommand::Set(Set { setting_name, value }) => {
             set(setting_name, value, stop_at_first_match, &registry);
@@ -416,6 +429,31 @@ fn main() {
         Subcommand::Load(Load { file }) => {
             load(file, stop_at_first_match, &registry);
         }
-    }
+        Subcommand::Dump => {
+            let mut settings: BTreeMap<String, String> = BTreeMap::new();
 
+            for setting in &registry {
+                let setting_name = &setting.name.as_str().to_string();
+                let setting_value = get(setting_name.to_string(), stop_at_first_match, false, &registry);
+
+                match setting_value {
+                    Ok(value) => {
+                        settings.insert(setting_name.to_string(), value);
+                    }
+                    Err(_) => {}
+                }
+            }
+
+            let json = serde_json::to_string_pretty(&settings);
+
+            match json {
+                Ok(value) => {
+                    println!("{}", value);
+                },
+                Err(_) => {
+                    eprintln!("Failed to generate JSON");
+                }
+            }
+        }
+    }
 }
