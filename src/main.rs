@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Serialize, Deserialize)]
-enum ReplaceType {
+enum Replace {
     #[serde(rename = "above")]
     Above,
     #[serde(rename = "below")]
@@ -30,7 +30,7 @@ struct Setting {
     file: String,
     pattern: Pattern,
     substitute: String,
-    replace_type: ReplaceType,
+    replace: Replace,
     value_is_file: bool
 }
 
@@ -175,18 +175,18 @@ fn set(setting_name: String, value: String, stop_at_first_match: bool, registry:
 
             for (i, line) in file.iter().enumerate() {
                 if regex.is_match(line) {
-                    match &setting.replace_type {
-                        ReplaceType::Above => {
+                    match &setting.replace {
+                        Replace::Above => {
                             if i != 0 {
                                 modified_file[i - 1] = substitute.to_string();
                             }
                         }
-                        ReplaceType::Below => {
+                        Replace::Below => {
                             if i != file.len() {
                                 modified_file[i + 1] = substitute.to_string();
                             }
                         }
-                        ReplaceType::Matched => {
+                        Replace::Matched => {
                             modified_file[i] = regex.replace_all(line, substitute).to_string();
                         }
                     }
@@ -257,18 +257,18 @@ fn get(setting_name: String, stop_at_first_match: bool, print: bool, registry: &
 
             for (i, line) in file.iter().enumerate() {
                 if regex.is_match(line) {
-                    match &setting.replace_type {
-                        ReplaceType::Above => {
+                    match &setting.replace {
+                        Replace::Above => {
                             if i != 0 {
                                 text = file[i - 1].to_string();
                             }
                         }
-                        ReplaceType::Below => {
+                        Replace::Below => {
                             if i != file.len() {
                                 text = file[i + 1].to_string();
                             }
                         }
-                        ReplaceType::Matched => {
+                        Replace::Matched => {
                             text = file[i].to_string();
                         }
                     }

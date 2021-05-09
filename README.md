@@ -1,24 +1,73 @@
-# The basic idea
-assign regex pattern to keyword, then associate value with keyword, then replace all matches of the regex pattern with the value, the user never sees the regex because he uses the keyword assigned to the regex
+# What?
+Exconman is a program that allows you to edit a configuration files for any program from the command line.
+Essentially, it's a glorified search and replace tool.
 
-The keywords should be changable from the command line, example: (exconman set bspwm_normal_border_color "#00ff00").
+# Why?
+It makes it easier to programmatically manage your dotfiles.
 
-The keyword above could be set to find the regex "bspc config normal_border_color .+" and replace it with "bspc config normal_border_color "{{provided_value}}>""". "{{provided_value}}" will be replaced by the value associated with the keyword.
+# How?
+You create a registry file at `~/.config/exconman/registry.json` containing an array of settings. Each each setting has a few options:
 
-## File Locations
-- The file storing the last values associated with the keywords with be located in .local/exconman/values (NOTE: This will not be necessary if I can find a way to get values from the application config file itself)
-- The file storing the possible keywords and their settings such as the regex and the various settings related to the keywords with be located at .config/exconman/settings
+1. `name` - The name of the setting, this has to be unique.
+2. `file` - The path to the file in which the setting is located.
+3. `pattern` - The pattern used to match the setting, possible values are:
+	1. A string containing a regex pattern to match one line which the substitute will replace
+	2. An array with two strings, both containing a regex pattern to each match one line. If a match is found for both, the substitute replaces all lines between them.
+4. `substitute` - A string that replaces whatever the pattern matched. If you put `{value}` in it, whatever value was provided by the user will replace it.
+5. `replace` - Specify what you want to replace. This option is ignored if the pattern is an array. Possible values are:
+	1. `matched` - As you'd expect, replace what ever matched the pattern
+	2. `above` - Replace the entire line above whatever matched the pattern
+	2. `below` - Replace the entire line below whatever matched the pattern
+6. `value_is_file` - A boolean. If true, it will treat the value provided by the user as a file path, and make it's contents the value which will replace the placeholder `{value}` in the substitute.
 
-The extensions of the files are not decided yet.
+# Practical Example
+Let's use a shortened BSPWM config file as a example.
 
-## Basic CLI
-- `exconman set <key> <value>` should replace regex matches associated to key with value
-- `exconman list` should list all keys
-- `exconman load <file>` should load key/value pairs from a file
-- `exconman get <key>` get last value key was associated with.
+bspwmrc:
+```
+bspc config window_gap 10
+bspc config normal_border_color "#000000"
+bspc config focused_border_color "#ffffff"
+```
 
-## Features
-- should be able to allow value to be a path, and then make the value the contents of that file.
-- should be able to match two lines and replace whatever is in between.
-- should be able to replace the line above or below the one containing the match
-- should be able to allow user to allow changing all matches, the first match or the last match to the value associated with the key
+registry.json:
+```
+[
+	{
+		"name": "bspwm.window_gap",
+		"file": "~/.config/bspwm/bspwmrc",
+		"pattern": "bspc config window_gap .*",
+		"substitute": "bspc config window_gap \"{value}\"",
+		"replace_type": "matched",
+		"value_is_file": false
+	},
+	{
+		"name": "bspwm.normal_border_color",
+		"file": "~/.config/bspwm/bspwmrc",
+		"pattern": "bspc config normal_border_color .*",
+		"substitute": "bspc normal_border_color \"{value}\"",
+		"replace_type": "matched",
+		"value_is_file": false
+	},
+	{
+		"name": "bspwm.focused_border_color",
+		"file": "~/.config/bspwm/bspwmrc",
+		"pattern": "bspc config focused_border_color .*",
+		"substitute": "bspc config focused_border_color \"{value}\"",
+		"replace_type": "matched",
+		"value_is_file": false
+	}
+]
+```
+
+Running `exconman get bspwm.window_gap` will print out `10`.
+Running `exconman set bspwm.normal_border_color "#333333"` will modify the line to `bspc config normal_border_color "#333333"`
+Running `exconman dump` will print out all the settings and their values in JSON format:
+```
+{
+	"bspwm.window_gap": "10",
+	"bspwm.normal_border_color": "#333333",
+	"bspwm.focused_border_color": "#ffffff",
+}
+```
+You can also set a bunch of settings in bulk if you have a JSON file in the same format like above `exconman load path/to/json/file.json`.
