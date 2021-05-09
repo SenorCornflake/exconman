@@ -61,7 +61,9 @@ registry.json:
 ```
 
 Running `exconman get bspwm.window_gap` will print out `10`.
+
 Running `exconman set bspwm.normal_border_color "#333333"` will modify the line to `bspc config normal_border_color "#333333"`
+
 Running `exconman dump` will print out all the settings and their values in JSON format:
 ```
 {
@@ -70,4 +72,4 @@ Running `exconman dump` will print out all the settings and their values in JSON
 	"bspwm.focused_border_color": "#ffffff",
 }
 ```
-You can also set a bunch of settings in bulk if you have a JSON file in the same format like above `exconman load path/to/json/file.json`.
+You can also set a bunch of settings in bulk if you have a JSON file in the same format like above using `exconman load path/to/json/file.json`.
