@@ -38,7 +38,7 @@ registry.json:
 		"file": "~/.config/bspwm/bspwmrc",
 		"pattern": "bspc config window_gap .*",
 		"substitute": "bspc config window_gap \"{value}\"",
-		"replace_type": "matched",
+		"replace": "matched",
 		"value_is_file": false
 	},
 	{
@@ -46,7 +46,7 @@ registry.json:
 		"file": "~/.config/bspwm/bspwmrc",
 		"pattern": "bspc config normal_border_color .*",
 		"substitute": "bspc normal_border_color \"{value}\"",
-		"replace_type": "matched",
+		"replace": "matched",
 		"value_is_file": false
 	},
 	{
@@ -54,7 +54,7 @@ registry.json:
 		"file": "~/.config/bspwm/bspwmrc",
 		"pattern": "bspc config focused_border_color .*",
 		"substitute": "bspc config focused_border_color \"{value}\"",
-		"replace_type": "matched",
+		"replace": "matched",
 		"value_is_file": false
 	}
 ]
