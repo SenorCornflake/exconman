@@ -1,12 +1,12 @@
 # What?
-Exconman is a program that allows you to edit a configuration files for any program from the command line.
+Exconman is a program that allows you to edit configuration files for any program from the command line.
 Essentially, it's a glorified search and replace tool.
 
 # Why?
 It makes it easier to programmatically manage your dotfiles.
 
 # How?
-You create a registry file at `~/.config/exconman/registry.json` containing an array of settings. Each each setting has a few options:
+You create a registry file at `~/.config/exconman/registry.json` containing an array of settings. Each setting has a few options:
 
 1. `name` - The name of the setting, this has to be unique.
 2. `file` - The path to the file in which the setting is located.

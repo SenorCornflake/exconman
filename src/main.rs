@@ -85,15 +85,15 @@ fn get_setting(setting_name: String, registry: &Vec<Setting>) -> Option<&Setting
             return Some(setting);
         }
     }
-    eprintln!("A setting named \"{}\" does not exist", setting_name);
+    eprintln!("Setting \"{}\" does not exist.", setting_name);
     return None;
 }
 
-fn validate_setting(setting: &Setting) -> Result<(), ()> {
+fn validate_setting(setting: &Setting, registry_path: &str) -> Result<(), ()> {
     let result = std::fs::metadata(expand_home(&setting.file));
     
     if result.is_err() {
-        eprintln!("Registry error for setting \"{}\": \"{}\" | {}", setting.name, setting.file, result.unwrap_err());
+        eprintln!("Error in setting \"{}\" in registry \"{}\": \"{}\" | {}", setting.name, registry_path, setting.file, result.unwrap_err());
         return Err(());
     }
     return Ok(());
@@ -376,46 +376,132 @@ fn load(file_name: String, stop_at_first_match: bool, registry: &Vec<Setting>) {
     }
 }
 
+fn get_registry(registry_path: &str) -> Result<Vec<Setting>, ()>{
+    match std::fs::metadata(registry_path) {
+        Err(_) => {
+            return Err(());
+        }
+        Ok(metadata) => {
+            if metadata.is_file() {
+                let registry = std::fs::read_to_string(&registry_path);
+
+                if registry.is_err() {
+                    eprintln!("Failed to read registry \"{}\"", registry_path);
+                }
+                let registry = registry.unwrap();
+
+                let registry: Result<Vec<Setting>, serde_json::Error> = serde_json::from_str(registry.as_str());
+
+                if registry.is_err() {
+                    eprintln!("JSON Error in registry \"{}\": {}", registry_path, registry.unwrap_err());
+                    return Err(());
+                }
+
+                let mut error_occured = false;
+
+                let registry = registry.unwrap();
+
+                for setting in &registry {
+                    let result = validate_setting(&setting, &registry_path);
+                    if result.is_err() {
+                        error_occured = true;
+                   }
+                }
+
+                if error_occured { return Err(()) }
+                
+                return Ok(registry);
+            } else if metadata.is_dir() {
+                // Join all registries in the registry directory
+                let files: Vec<Result<std::fs::DirEntry, _>> = std::fs::read_dir(registry_path).unwrap().collect();
+                let mut joined_registry: Vec<Setting> = Vec::new();
+
+                for file in files {
+                    let registry_path = file.unwrap().path();
+                    let registry_path = registry_path.display();
+                    let registry_path = registry_path.to_string();
+
+                    let registry = std::fs::read_to_string(&registry_path);
+
+                    if registry.is_err() {
+                        eprintln!("Failed to read registry \"{}\"", registry_path);
+                    }
+                    let registry = registry.unwrap();
+
+                    let registry: Result<Vec<Setting>, serde_json::Error> = serde_json::from_str(registry.as_str());
+
+                    if registry.is_err() {
+                        eprintln!("JSON Error in registry \"{}\": {}", registry_path, registry.unwrap_err());
+                        return Err(());
+                    }
+
+                    let mut error_occured = false;
+
+                    let mut registry = registry.unwrap();
+
+                    for setting in &registry {
+                        let result = validate_setting(&setting, &registry_path);
+                        if result.is_err() {
+                            error_occured = true;
+                       }
+                    }
+
+                    if error_occured { continue; }
+
+                    joined_registry.append(&mut registry);
+                }
+
+                return Ok(joined_registry);
+            }
+        }
+    }
+
+    return Err(());
+}
+
 fn main() {
     let args = Args::from_args();
 
     let subcommand = args.sub;
     let registry_path = args.registry;
     let stop_at_first_match = args.stop_at_first_match;
-
-    let registry_path: String = if registry_path.is_some() {
-        registry_path.unwrap()
+    
+    let registry_path: Result<String, ()> = if registry_path.is_some() {
+        Ok(registry_path.unwrap())
     } else {
-        String::from("~/.config/exconman/registry.json")
+        // The following code chooses whichever registry paths exists as the registry path
+        let registry_file = "~/.config/exconman/registry.json";
+        let registry_file: String = expand_home(registry_file);
+
+        let registry_dir = "~/.config/exconman/registry";
+        let registry_dir: String = expand_home(registry_dir);
+        
+        let file_metadata = std::fs::metadata(&registry_file);
+        let dir_metadata = std::fs::metadata(&registry_dir);
+
+        if file_metadata.is_err() && dir_metadata.is_err() {
+            eprintln!("Both default registry paths \"{}\" and \"{}\" do not exist, create them or provide a location to a registry using --registry", registry_file, registry_dir);
+            Err(())
+        } else {
+            if file_metadata.is_ok() {
+                Ok(registry_file)
+            } else {
+                Ok(registry_dir)
+            }
+        }
     };
-    
-    let registry = std::fs::read_to_string(&expand_home(&registry_path));
 
-    if registry.is_err() {
-        eprintln!("{} {}", registry_path, registry.unwrap_err());
-        return;
-    }
-    
-    let registry: Result<Vec<Setting>, serde_json::Error> = serde_json::from_str(registry.unwrap().as_str());
-
-    if registry.is_err() {
-        eprintln!("Registry JSON Error: {}", registry.unwrap_err());
+    if registry_path.is_err() {
         return;
     }
 
-    let mut error_occured = false;
+    let registry_path = registry_path.unwrap();
+
+    let registry = get_registry(&registry_path);
+
+    if registry.is_err() { return; }
 
     let registry = registry.unwrap();
-
-    for setting in &registry {
-        let result = validate_setting(&setting);
-        if result.is_err() {
-            error_occured = true;
-       }
-    }
-
-    if error_occured { return }
-
 
     match subcommand {
         Subcommand::Get(Get { setting_name }) => {
