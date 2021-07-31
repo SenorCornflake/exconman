@@ -1,0 +1,11 @@
+[
+	{
+		"name": "alacritty.colorscheme",
+		"file": "~/.config/bspwm/bspwmrc",
+		"pattern": ["lemon", "lemon"],
+		"substitute": "",
+		"replace": "line_above",
+		"read_value_path": true,
+		"multiple": true
+	}
+]
