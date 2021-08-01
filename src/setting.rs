@@ -25,7 +25,10 @@ pub struct Setting {
     pub file: String,
     pub pattern: Pattern,
     pub substitute: String,
-    pub replace: Replace,
-    pub read_value_path: bool,
-    pub multiple: bool
+
+    pub replace: Option<Replace>, // Default: MatchedText
+    pub read_value_path: Option<bool>, // Default: false,
+    pub multiple: Option<bool>, // Default: false
+    pub before: Option<String>, // Default: false
+    pub after: Option<String>, // Default: false
 }

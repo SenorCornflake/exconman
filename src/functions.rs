@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::util;
 use crate::setting::Setting;
 use crate::args::Args;
@@ -122,7 +124,16 @@ pub fn get_registry(args: Args) -> Result<Vec<Setting>, ()> {
 	let registry_path = registry_path.unwrap();
 
 	let registry: Result<Vec<Setting>, ()> = match std::fs::metadata(&registry_path) {
-		Err(_) => {
+		Err(error) => {
+            eprintln!(
+                "Failed to read {}\"{}\"{}: {}{}{}",
+                util::color("green", "fg"),
+                registry_path,
+                util::color("white", "fg"),
+                util::color("red", "fg"),
+                error,
+                util::color("white", "fg")
+            );
 			return Err(());
 		}
 		Ok(metadata) => {
@@ -243,3 +254,62 @@ pub fn get_registry(args: Args) -> Result<Vec<Setting>, ()> {
 
 	Ok(registry.unwrap())
 }
+
+// Handle all user keys within a setting besides the builtin "{value}" key
+pub fn handle_user_keys(setting: &Setting, config: &Option<Config>) -> Option<String> {
+    let mut substitute = setting.substitute.clone();
+    
+    if let Some(config) = config {
+        for (key, shell_command) in &config.keys {
+            let output = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(shell_command)
+                .output();
+
+            let stderr = String::from_utf8_lossy(&output.as_ref().unwrap().stderr);
+            let stderr = stderr.trim_end();
+
+            if output.is_err() {
+                eprintln!(
+                    "Error getting value for key {}\"{}\"{}: {}Error occured while trying to run command \"sh -c {}\"{}",
+                    util::color("green", "fg"),
+                    key,
+                    util::color("white", "fg"),
+                    util::color("red", "fg"),
+                    shell_command,
+                    util::color("white", "fg")
+                );
+
+                return None;
+            } else if stderr.len() > 0 {
+                eprintln!(
+                    "Error getting value for key {}\"{}\"{}: {}{}{}",
+                    util::color("green", "fg"),
+                    key,
+                    util::color("white", "fg"),
+                    util::color("red", "fg"),
+                    stderr,
+                    util::color("white", "fg")
+                );
+
+                return None;
+            }
+
+            let output = output.unwrap();
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stdout = &stdout.trim_end();
+            
+            let left = "{";
+            let right = "}";
+            let replace_text = &format!("{}{}{}", left, key, right);
+
+            substitute = substitute.replace(replace_text, stdout);
+        }
+        
+        return Some(substitute);
+    }
+
+    None
+}
+

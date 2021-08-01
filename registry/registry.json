@@ -3,9 +3,9 @@
 		"name": "alacritty.colorscheme",
 		"file": "~/.config/bspwm/bspwmrc",
 		"pattern": ["lemon", "lemon"],
-		"substitute": "",
+		"substitute": "{home}/.config/nvim/init.lua",
 		"replace": "line_above",
 		"read_value_path": true,
-		"multiple": true
+		"multiple": false
 	}
 ]

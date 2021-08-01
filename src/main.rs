@@ -25,5 +25,4 @@ fn main() {
 	}
 
 	let registry = registry.unwrap();
-
 }
