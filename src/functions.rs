@@ -1,6 +1,7 @@
 use crate::util;
 use crate::setting::Setting;
 use crate::args::Args;
+use crate::config::Config;
 
 fn validate_setting(setting: &Setting, registry_path: &str) -> Result<(), ()> {
     let file = &util::expand_home(&setting.file);
@@ -8,7 +9,7 @@ fn validate_setting(setting: &Setting, registry_path: &str) -> Result<(), ()> {
 
     match std::fs::metadata(file) {
         Err(err) => {
-            println!(
+            eprintln!(
                 "Error occured while validating setting {}\"{}\"{} in {}\"{}\"{}: {}\"{}\" - {}{}",
                 util::color("green", "fg"),
                 name,
@@ -25,7 +26,7 @@ fn validate_setting(setting: &Setting, registry_path: &str) -> Result<(), ()> {
         }
         Ok(metadata) => {
             if metadata.is_dir() {
-                println!(
+                eprintln!(
                     "Error occured while validating setting {}\"{}\"{} in {}\"{}\"{}: {}{} is a directory{}",
                     util::color("green", "fg"),
                     name,
@@ -46,20 +47,32 @@ fn validate_setting(setting: &Setting, registry_path: &str) -> Result<(), ()> {
 }
 
 // Get the config file, if it exists
-pub fn get_config() -> Option<String> {
+pub fn get_config() -> Option<Config> {
     let config_metadata = std::fs::metadata(util::expand_home("~/.config/exconman/config.json"));
 
     if config_metadata.is_ok() {
         let config_metadata = config_metadata.unwrap();
 
         if config_metadata.is_dir() {
-            println!("Config path {}\"~/.config/exconman/config.json\"{} is a directory.", util::color("green", "fg"), util::color("white", "fg"));
+            eprintln!("Config path {}\"~/.config/exconman/config.json\"{} is a directory.", util::color("green", "fg"), util::color("white", "fg"));
             None
         } else {
-            let config_contents = std::fs::read_to_string(&util::expand_home("~/.config/exconman/config.json"));
+            let config = std::fs::read_to_string(&util::expand_home("~/.config/exconman/config.json"));
 
-            if config_contents.is_ok() {
-                Some(config_contents.unwrap())
+            if config.is_ok() {
+				let config: Result<Config, serde_json::Error> = serde_json::from_str(&config.unwrap());
+
+                if config.is_err() {
+                    eprintln!(
+                        "Config Error: {}{}{}",
+                        util::color("red", "fg"),
+                        config.unwrap_err(),
+                        util::color("white", "fg"),
+                    );
+                    return None
+                }
+
+                Some(config.unwrap())
             } else {
                 None
             }
@@ -82,7 +95,7 @@ pub fn get_registry(args: Args) -> Result<Vec<Setting>, ()> {
         let dir_results = std::fs::metadata(&registry_dir);
 
         if file_results.is_err() && dir_results.is_err() {
-            println!(
+            eprintln!(
                 "Default registry paths \"{}{}{}\" and \"{}{}{}\" do not exist.\n\nCreate one of them or provide a custom path using {}--registry{}",
                 util::color("green", "fg"),
                 registry_file,
@@ -116,7 +129,7 @@ pub fn get_registry(args: Args) -> Result<Vec<Setting>, ()> {
 				let registry = std::fs::read_to_string(&registry_path);
 
 				if registry.is_err() {
-                    println!(
+                    eprintln!(
                         "Failed to read {}\"{}\"{}",
                         util::color("green", "fg"),
                         registry_path,

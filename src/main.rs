@@ -10,6 +10,7 @@ mod args;
 mod util;
 mod setting;
 mod functions;
+mod config;
 
 use args::Args;
 
@@ -17,7 +18,6 @@ fn main() {
     let args = Args::from_args();
 
     let config = functions::get_config();
-    
 	let registry = functions::get_registry(args);
 
 	if registry.is_err() {
@@ -26,5 +26,4 @@ fn main() {
 
 	let registry = registry.unwrap();
 
-	println!("{:#?}", registry);
 }
