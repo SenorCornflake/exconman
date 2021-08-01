@@ -82,6 +82,7 @@ pub fn get_config() -> Option<Config> {
     }
 }
 
+// Get the registry, whether it's a dir or file.
 pub fn get_registry(args: Args) -> Result<Vec<Setting>, ()> {
     let registry_path: Result<String, ()> = if args.registry.is_some() {
         let registry = args.registry.unwrap();
@@ -183,8 +184,16 @@ pub fn get_registry(args: Args) -> Result<Vec<Setting>, ()> {
 
                     let registry = std::fs::read_to_string(&registry_path);
 
-					// TODO: Put error message here
 					if registry.is_err() {
+                        eprintln!(
+                            "Failed to read {}\"{}\"{}: {}{}{}",
+                            util::color("green", "fg"),
+                            registry_path,
+                            util::color("white", "fg"),
+                            util::color("red", "fg"),
+                            registry.unwrap_err(),
+                            util::color("white", "fg")
+                        );
 						return Err(())
 					}
 

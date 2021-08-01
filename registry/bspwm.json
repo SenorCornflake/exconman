@@ -1,0 +1,11 @@
+[
+	{
+		"name": "bspwm.normal_border_color",
+		"file": "~/.config/bspwm/bspwmrc",
+		"pattern": "bspc config normal_border_color .*",
+		"substitute": "bspc config normal_border_color \"{value}\"",
+		"replace": "matched_text",
+		"read_value_path": false,
+		"multiple": true
+	}
+]
