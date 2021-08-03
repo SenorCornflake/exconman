@@ -1,52 +1,11 @@
 use std::collections::HashMap;
 
+use regex::Regex;
+
 use crate::util;
-use crate::setting::Setting;
+use crate::setting::{Setting, Pattern, Replace};
 use crate::args::Args;
 use crate::config::Config;
-
-fn validate_setting(setting: &Setting, registry_path: &str) -> Result<(), ()> {
-    let file = &util::expand_home(&setting.file);
-    let name = &setting.name;
-
-    match std::fs::metadata(file) {
-        Err(err) => {
-            eprintln!(
-                "Error occured while validating setting {}\"{}\"{} in {}\"{}\"{}: {}\"{}\" - {}{}",
-                util::color("green", "fg"),
-                name,
-                util::color("white", "fg"),
-                util::color("green", "fg"),
-                registry_path,
-                util::color("white", "fg"),
-                util::color("red", "fg"),
-                file,
-                err.to_string() ,
-                util::color("white", "fg")
-            );
-            return Err(());
-        }
-        Ok(metadata) => {
-            if metadata.is_dir() {
-                eprintln!(
-                    "Error occured while validating setting {}\"{}\"{} in {}\"{}\"{}: {}{} is a directory{}",
-                    util::color("green", "fg"),
-                    name,
-                    util::color("white", "fg"),
-                    util::color("green", "fg"),
-                    registry_path,
-                    util::color("white", "fg"),
-                    util::color("red", "fg"),
-                    file,
-                    util::color("white", "fg")
-                );
-                return Err(());
-            }
-
-            return Ok(());
-        }
-    }
-}
 
 // Get the config file, if it exists
 pub fn get_config() -> Option<Config> {
@@ -85,9 +44,9 @@ pub fn get_config() -> Option<Config> {
 }
 
 // Get the registry, whether it's a dir or file.
-pub fn get_registry(args: Args) -> Result<Vec<Setting>, ()> {
-    let registry_path: Result<String, ()> = if args.registry.is_some() {
-        let registry = args.registry.unwrap();
+pub fn get_registry(registry: Option<String>) -> Result<Vec<Setting>, ()> {
+    let registry_path: Result<String, ()> = if registry.is_some() {
+        let registry = registry.unwrap();
         Ok(registry)
     } else {
         // Decide which default registry path to use, either the file or the directory
@@ -168,19 +127,6 @@ pub fn get_registry(args: Args) -> Result<Vec<Setting>, ()> {
 				
 				let registry = registry.unwrap();
 
-                let mut error_occured = false;
-
-                for setting in &registry {
-                    let result = validate_setting(setting, &registry_path);
-                    if result.is_err() {
-                        error_occured = true;
-                    }
-                }
-
-                if error_occured {
-                    return Err(());
-                }
-
 				Ok(registry)
 			} else {
                 let files: Vec<Result<std::fs::DirEntry, _>> = std::fs::read_dir(registry_path)
@@ -226,20 +172,6 @@ pub fn get_registry(args: Args) -> Result<Vec<Setting>, ()> {
 
 					let mut registry = registry.unwrap();
 
-                    // Validate registry settings
-                    let mut error_occured = false;
-
-                    for setting in &registry {
-                        let result = validate_setting(setting, &registry_path);
-                        if result.is_err() {
-                            error_occured = true;
-                        }
-                    }
-
-                    if error_occured {
-                        return Err(());
-                    }
-
 					joined_registry.append(&mut registry);
 				}
 				
@@ -255,61 +187,258 @@ pub fn get_registry(args: Args) -> Result<Vec<Setting>, ()> {
 	Ok(registry.unwrap())
 }
 
-// Handle all user keys within a setting besides the builtin "{value}" key
-pub fn handle_user_keys(setting: &Setting, config: &Option<Config>) -> Option<String> {
-    let mut substitute = setting.substitute.clone();
-    
-    if let Some(config) = config {
-        for (key, shell_command) in &config.keys {
-            let output = std::process::Command::new("sh")
-                .arg("-c")
-                .arg(shell_command)
+// Run a hook, does this by checking if the hook is a valid path, if it is, it runs it as a shell
+// script, if it isn't a valid path, or the path is valid but it cannot execute it,
+// it interprets it as a shell command and runs it
+pub fn run_hook(hook_name: String, hook_command: String) {
+
+    fn run(hook_type: &str, hook_name: &str, hook_command: &str) {
+        let output: Result<std::process::Output, std::io::Error>;
+
+        if hook_command == String::from("file") {
+            output = std::process::Command::new("sh")
+                .arg(hook_command)
                 .output();
-
-            let stderr = String::from_utf8_lossy(&output.as_ref().unwrap().stderr);
-            let stderr = stderr.trim_end();
-
-            if output.is_err() {
-                eprintln!(
-                    "Error getting value for key {}\"{}\"{}: {}Error occured while trying to run command \"sh -c {}\"{}",
-                    util::color("green", "fg"),
-                    key,
-                    util::color("white", "fg"),
-                    util::color("red", "fg"),
-                    shell_command,
-                    util::color("white", "fg")
-                );
-
-                return None;
-            } else if stderr.len() > 0 {
-                eprintln!(
-                    "Error getting value for key {}\"{}\"{}: {}{}{}",
-                    util::color("green", "fg"),
-                    key,
-                    util::color("white", "fg"),
-                    util::color("red", "fg"),
-                    stderr,
-                    util::color("white", "fg")
-                );
-
-                return None;
-            }
-
-            let output = output.unwrap();
-
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stdout = &stdout.trim_end();
-            
-            let left = "{";
-            let right = "}";
-            let replace_text = &format!("{}{}{}", left, key, right);
-
-            substitute = substitute.replace(replace_text, stdout);
+        } else {
+            output = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(hook_command)
+                .output();
         }
-        
-        return Some(substitute);
+
+        let stderr = String::from_utf8_lossy(&output.as_ref().unwrap().stderr);
+        let stderr = stderr.trim_end();
+
+        if output.is_err() {
+            eprintln!(
+                "Error running {}\"{}\"{} hook: {}Error occured while trying to run command \"{}\"{}",
+                util::color("green", "fg"),
+                hook_name,
+                util::color("white", "fg"),
+                util::color("red", "fg"),
+                hook_command,
+                util::color("white", "fg")
+            );
+
+            return;
+        } else if stderr.len() > 0 {
+            eprintln!(
+                "Error running {}\"{}\"{} hook: {}{}{}",
+                util::color("green", "fg"),
+                hook_name,
+                util::color("white", "fg"),
+                util::color("red", "fg"),
+                stderr,
+                util::color("white", "fg")
+            );
+
+            return;
+        }
     }
 
-    None
+    match std::fs::metadata(util::expand_home(&hook_command)) {
+        Err(_) => {
+            run("command", &hook_name, &hook_command);
+        },
+        Ok(metadata) => {
+            if metadata.is_dir() {
+                run("command", &hook_name, &hook_command);
+            } else {
+                run("file", &hook_name, &hook_command);
+            }
+        }
+    }
 }
 
+pub fn get_setting(setting_name: String, registry: &Vec<Setting>) -> Option<&Setting> {
+    for setting in registry {
+        if setting.name == setting_name {
+            return Some(setting);
+        }
+    }
+    return None;
+}
+
+pub fn set(name: String, value: String, config: &Option<Config>, registry: &Vec<Setting>) {
+    let setting = get_setting(name, registry);
+
+    // TODO: Error message
+    if setting.is_none() {
+        return;
+    }
+
+    let setting = setting.unwrap();
+
+    // Open the file   
+    let file = std::fs::read_to_string(&util::expand_home(&setting.file));
+
+    if file.is_err() {
+        eprintln!(
+            "Error opening file {}\"{}\"{} for setting {}\"{}\"{}: {}{}{}",
+            util::color("green", "fg"),
+            setting.file,
+            util::color("white", "fg"),
+            util::color("green", "fg"),
+            setting.name,
+            util::color("white", "fg"),
+            util::color("red", "fg"),
+            file.unwrap_err(),
+            util::color("", "fg")
+        );
+        return;
+    }
+
+    let file = file.unwrap();
+    // Split file into lines
+    let mut file: Vec<&str> = file
+        .split("\n")
+        .collect();
+
+    let substitute: String;
+
+    if setting.read_value_path.is_some() && setting.read_value_path.unwrap() == true {
+        let contents = std::fs::read_to_string(&util::expand_home(&value));
+
+        if contents.is_err() {
+            eprintln!(
+                "Error opening file {}\"{}\"{} path provided in the value for setting {}\"{}\"{}: {}{}{}",
+                util::color("green", "fg"),
+                value,
+                util::color("white", "fg"),
+                util::color("green", "fg"),
+                setting.name,
+                util::color("white", "fg"),
+                util::color("red", "fg"),
+                contents.unwrap_err(),
+                util::color("", "fg")
+            );
+            return;
+        }
+
+        let contents = contents.unwrap();
+        substitute = setting.substitute.replace("{value}", &contents);
+    } else {
+        substitute = setting.substitute.replace("{value}", &value);
+    }
+
+    match &setting.pattern {
+        Pattern::Line(pattern) => {
+            let rgx = Regex::new(&pattern);
+
+            if rgx.is_err() {
+                eprintln!(
+                    "Error occured while compiling regex for setting {}\"{}\"{}: {}{}{}",
+                    util::color("green", "fg"),
+                    setting.name,
+                    util::color("white", "fg"),
+                    util::color("red", "fg"),
+                    rgx.unwrap_err(),
+                    util::color("white", "fg"),
+                );
+                return;
+            }
+
+            let rgx = rgx.unwrap();
+
+            for i in 0..file.len() {
+                let line = file[i];
+
+                if rgx.is_match(line) {
+                    match &setting.replace {
+                        None => {
+                            file[i] = &substitute;
+                        }
+                        Some(replace) => {
+                            match replace {
+                                Replace::LineAbove => {
+                                    if i != 0 {
+                                        file[i - 1] = &substitute;
+                                    }
+                                }
+                                Replace::MatchedText => {
+                                    file[i] = &substitute;
+                                }
+                                Replace::LineBelow => {
+                                    if i != file.len() - 1 {
+                                        file[i + 1] = &substitute;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if setting.multiple.is_none() || setting.multiple.unwrap() == false {
+                        break;
+                    }
+                }
+            }
+
+        }
+        Pattern::Region(region) => {
+            let mut region_start: Option<usize> = None;
+            let mut region_end: Option<usize> = None;
+            
+            let rgx_start = Regex::new(&region[0]);
+            let rgx_end = Regex::new(&region[1]);
+
+            if rgx_start.is_err() || rgx_end.is_err() {
+                eprintln!(
+                    "Error occured while compiling regex for setting {}\"{}\"{}: {}{}{}",
+                    util::color("green", "fg"),
+                    setting.name,
+                    util::color("white", "fg"),
+                    util::color("red", "fg"),
+                    rgx_start.unwrap_err(),
+                    util::color("white", "fg"),
+                );
+                return;
+            }
+
+            let rgx_start = rgx_start.unwrap();
+            let rgx_end = rgx_end.unwrap();
+
+            for i in 0..file.len() {
+                let line = file[i];
+                if rgx_start.is_match(line) {
+                    region_start = Some(i);
+
+                    if (setting.multiple.is_none() || setting.multiple.unwrap() == false) && region_end.is_some() {
+                        break;
+                    }
+                }
+                if rgx_end.is_match(line) {
+                    region_end = Some(i);
+
+                    if (setting.multiple.is_none() || setting.multiple.unwrap() == false) && region_start.is_some() {
+                        break;
+                    }
+                }
+            }
+
+            if region_start.is_none() || region_end.is_none() || region_start.unwrap() >= region_end.unwrap() {
+                return;
+            }
+
+            file.drain(region_start.unwrap() + 1..region_end.unwrap());
+            file.insert(region_start.unwrap() + 1, &substitute);
+        }
+    }
+
+
+    let file = file.join("\n");
+
+    match std::fs::write(util::expand_home(&setting.file), file) {
+        Err(error) => {
+            eprintln!(
+                "Failed to write to {}\"{}\"{}: {}{}{}",
+                util::color("green", "fg"),
+                setting.file,
+                util::color("white", "fg"),
+                util::color("red", "fg"),
+                error,
+                util::color("white", "fg"),
+            );
+        }
+        _ => {}
+    }
+}

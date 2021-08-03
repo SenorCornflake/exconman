@@ -1,10 +1,10 @@
 [
 	{
 		"name": "alacritty.colorscheme",
-		"file": "~/.config/bspwm/bspwmrc",
-		"pattern": ["lemon", "lemon"],
-		"substitute": "{home}/.config/nvim/init.lua",
-		"replace": "line_above",
+		"file": "~/repos/exconman/lemon.txt",
+		"pattern": "lemon = .+",
+		"substitute": "lemon = {value}",
+		"replace": "line_below",
 		"read_value_path": true,
 		"multiple": false
 	}
