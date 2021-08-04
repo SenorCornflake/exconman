@@ -4,7 +4,6 @@ use regex::Regex;
 
 use crate::util;
 use crate::setting::{Setting, Pattern, Replace};
-use crate::args::Args;
 use crate::config::Config;
 
 // Get the config file, if it exists
@@ -195,7 +194,7 @@ pub fn run_hook(hook_name: String, hook_command: String) {
     fn run(hook_type: &str, hook_name: &str, hook_command: &str) {
         let output: Result<std::process::Output, std::io::Error>;
 
-        if hook_command == String::from("file") {
+        if hook_type == String::from("file") {
             output = std::process::Command::new("sh")
                 .arg(hook_command)
                 .output();
@@ -260,6 +259,13 @@ pub fn get_setting(setting_name: String, registry: &Vec<Setting>) -> Option<&Set
 }
 
 pub fn set(name: String, value: String, config: &Option<Config>, registry: &Vec<Setting>) {
+
+    if let Some(config) = config {
+        if let Some(hook_before_set) = &config.hook_before_set {
+            run_hook("hook_before_get".to_string(), hook_before_set.to_string());
+        }
+    }
+
     let setting = get_setting(name, registry);
 
     // TODO: Error message
@@ -441,14 +447,29 @@ pub fn set(name: String, value: String, config: &Option<Config>, registry: &Vec<
         }
         _ => {}
     }
+
+    if let Some(config) = config {
+        if let Some(hook_after_set) = &config.hook_after_set {
+            run_hook("hook_after_get".to_string(), hook_after_set.to_string());
+        }
+    }
 }
 
-pub fn get(name: String, config: &Option<Config>, registry: &Vec<Setting>) {
+pub fn get(name: String, print: bool, config: &Option<Config>, registry: &Vec<Setting>) -> Option<String> {
+    // Don't run hooks when dumping
+    if print {
+        if let Some(config) = config {
+            if let Some(hook_after_get) = &config.hook_after_get {
+                run_hook("hook_after_get".to_string(), hook_after_get.to_string());
+            }
+        }
+    }
+
     let setting = get_setting(name, registry);
 
     // TODO: Error message
     if setting.is_none() {
-        return;
+        return None;
     }
 
     let setting = setting.unwrap();
@@ -469,7 +490,7 @@ pub fn get(name: String, config: &Option<Config>, registry: &Vec<Setting>) {
             file.unwrap_err(),
             util::color("", "fg")
         );
-        return;
+        return None;
     }
 
     let file = file.unwrap();
@@ -494,7 +515,7 @@ pub fn get(name: String, config: &Option<Config>, registry: &Vec<Setting>) {
                     rgx.unwrap_err(),
                     util::color("white", "fg"),
                 );
-                return;
+                return None;
             }
 
             let rgx = rgx.unwrap();
@@ -550,7 +571,7 @@ pub fn get(name: String, config: &Option<Config>, registry: &Vec<Setting>) {
                     rgx_start.unwrap_err(),
                     util::color("white", "fg"),
                 );
-                return;
+                return None;
             }
 
             let rgx_start = rgx_start.unwrap();
@@ -575,7 +596,7 @@ pub fn get(name: String, config: &Option<Config>, registry: &Vec<Setting>) {
             }
 
             if region_start.is_none() || region_end.is_none() || region_start.unwrap() >= region_end.unwrap() {
-                return;
+                return None;
             }
 
             text = file[region_start.unwrap() + 1 .. region_end.unwrap()]
@@ -610,7 +631,7 @@ pub fn get(name: String, config: &Option<Config>, registry: &Vec<Setting>) {
             built_rgx.unwrap_err(),
             util::color("white", "fg"),
         );
-        return;
+        return None;
     }
     let built_rgx = built_rgx.unwrap();
 
@@ -623,7 +644,7 @@ pub fn get(name: String, config: &Option<Config>, registry: &Vec<Setting>) {
             setting.name,
             util::color("white", "fg"),
         );
-        return;
+        return None;
     }
 
     let start_of_text = start_of_text
@@ -638,7 +659,7 @@ pub fn get(name: String, config: &Option<Config>, registry: &Vec<Setting>) {
             setting.name,
             util::color("white", "fg"),
         );
-        return;
+        return None;
     }
     let start_of_value = start_of_value.unwrap();
 
@@ -661,5 +682,79 @@ pub fn get(name: String, config: &Option<Config>, registry: &Vec<Setting>) {
 
     let text = text.join("");
 
-    println!("{}", text);
+    if print {
+        println!("{}", text);
+    } else {
+        return Some(text);
+    }
+
+    if print {
+        if let Some(config) = config {
+            if let Some(hook_after_get) = &config.hook_after_get {
+                run_hook("hook_after_get".to_string(), hook_after_get.to_string());
+            }
+        }
+    }
+
+    return None
+}
+
+pub fn load(file: String, config: &Option<Config>, registry: &Vec<Setting>) {
+    let settings = std::fs::read_to_string(&file);
+
+    if settings.is_err() {
+        eprintln!(
+            "Failed to read file {}\"{}\"{}: {}{}{}",
+            util::color("green", "fg"),
+            file,
+            util::color("white", "fg"),
+            util::color("red", "fg"),
+            settings.unwrap_err(),
+            util::color("white", "fg"),
+        );
+        return;
+    }
+
+    let settings = settings.unwrap();
+    let settings: Result<HashMap<String, String>, serde_json::Error> = serde_json::from_str(&settings);
+
+    if settings.is_err() {
+        eprintln!(
+            "JSON error in file {}\"{}\"{}: {}{}{}",
+            util::color("green", "fg"),
+            file,
+            util::color("white", "fg"),
+            util::color("red", "fg"),
+            settings.unwrap_err(),
+            util::color("white", "fg"),
+        );
+        return;
+    }
+
+    let settings = settings.unwrap();
+
+    for (name, value) in settings {
+        set(name, value, config, registry);
+    }
+}
+
+pub fn dump(config: &Option<Config>, registry: &Vec<Setting>) {
+    let mut settings: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+
+    for setting in registry {
+        let name = &setting.name;
+        let value = get(name.to_string(), false, config, registry);
+
+        if let Some(value) = value {
+            settings.insert(name.to_string(), value);
+        }
+    }
+    
+    let json = serde_json::to_string_pretty(&settings);
+
+    if let Ok(json) = json {
+        println!("{}", json);
+    } else {
+        eprintln!("Failed to generate JSON");
+    }
 }

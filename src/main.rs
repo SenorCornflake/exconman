@@ -1,10 +1,4 @@
-use std::collections::HashMap;
-use std::collections::BTreeMap;
-
-use serde_derive::{Serialize, Deserialize};
-use serde_json;
 use structopt::StructOpt;
-use regex::Regex;
 
 mod args;
 mod util;
@@ -32,13 +26,13 @@ fn main() {
             functions::set(name, value, &config, &registry);
         }
         SubCommands::Get(Get { name }) => {
-            functions::get(name, &config, &registry);
+            functions::get(name, true, &config, &registry);
         }
         SubCommands::Load(Load { path }) => {
-
+            functions::load(path, &config, &registry);
         }
         SubCommands::Dump => {
-
+            functions::dump(&config, &registry);
         }
     }
 }

@@ -1,75 +1,37 @@
-# What?
-Exconman is a program that allows you to edit configuration files for any program from the command line.
-Essentially, it's a glorified search and replace tool.
+# What
+Exconman is a program that will edit your config files for you so you don't have to.
 
-# Why?
-It makes it easier to programmatically manage your dotfiles.
+# Why
+You can have multiple themes for each program without having more than one config file for the program itself. 
 
-# How?
-You create a registry file at `~/.config/exconman/registry.json` containing an array of settings. Each setting has a few options:
+# How
+There are two configuration files for exconman located in `~/.config/exconman`, one is `registry.json` and the other is `config.json`.
 
-1. `name` - The name of the setting, this has to be unique.
-2. `file` - The path to the file in which the setting is located.
-3. `pattern` - The pattern used to match the setting, possible values are:
-	1. A string containing a regex pattern to match one line which the substitute will replace
-	2. An array with two strings, both containing a regex pattern to each match one line. If a match is found for both, the substitute replaces all lines between them.
-4. `substitute` - A string that replaces whatever the pattern matched. If you put `{value}` in it, whatever value was provided by the user will replace it.
-5. `replace` - Specify what you want to replace. This option is ignored if the pattern is an array. Possible values are:
-	1. `matched` - As you'd expect, replace what ever matched the pattern
-	2. `above` - Replace the entire line above whatever matched the pattern
-	2. `below` - Replace the entire line below whatever matched the pattern
-6. `value_is_file` - A boolean. If true, it will treat the value provided by the user as a file path, and make it's contents the value which will replace the placeholder `{value}` in the substitute.
+`registry.json` contains the information required to locate the text in a file that will be changed. For example:
 
-# Practical Example
-Let's use a shortened BSPWM config file as a example.
-
-bspwmrc:
-```
-bspc config window_gap 10
-bspc config normal_border_color "#000000"
-bspc config focused_border_color "#ffffff"
-```
-
-registry.json:
 ```
 [
 	{
-		"name": "bspwm.window_gap",
-		"file": "~/.config/bspwm/bspwmrc",
-		"pattern": "bspc config window_gap .*",
-		"substitute": "bspc config window_gap \"{value}\"",
-		"replace": "matched",
-		"value_is_file": false
-	},
-	{
 		"name": "bspwm.normal_border_color",
-		"file": "~/.config/bspwm/bspwmrc",
-		"pattern": "bspc config normal_border_color .*",
-		"substitute": "bspc normal_border_color \"{value}\"",
-		"replace": "matched",
-		"value_is_file": false
-	},
-	{
-		"name": "bspwm.focused_border_color",
-		"file": "~/.config/bspwm/bspwmrc",
-		"pattern": "bspc config focused_border_color .*",
-		"substitute": "bspc config focused_border_color \"{value}\"",
-		"replace": "matched",
-		"value_is_file": false
+		"file": "~/.config/bspmwm/bspwmrc",
+		"pattern": "bspc config normal_border_color .+",
+		"substitute": "bspc config normal_border_color {value}",
 	}
 ]
 ```
+Considering the above registry, if we wanted to set the normal border color for bspwm to `#333333` we'd run `exconman set bspwm.normal_border_color "#333333"`.
 
-Running `exconman get bspwm.window_gap` will print out `10`.
+This registry contains ONE setting identified by the **name** `bspwm.normal_border_color`.
+It will open the **file** `~/.config/bspwm/bspwmrc`, then it will look for any text that matches a regex **pattern**, in this case, the pattern is `bspc config normal_border_color .+`,
+after it has found a match, it will replace whatever text was matched with the **substitute**, the `{value}` placeholder will be replaced by whatever text is provided in the exconman command.
 
-Running `exconman set bspwm.normal_border_color "#333333"` will modify the line to `bspc config normal_border_color "#333333"`
+# Documentation (Work in progress)
+## Registry Settings
+1. `name`: The name of the setting, should be unique.
+2. `file`: The file where the pattern is searched for.
+3. `pattern`: The pattern to search for, any valid rust regex will work here. If this is a pattern, it will search for a line, but if it is an array containing two patterns, it will match any two lines that match those patterns then it will replace all text between them with the substitute.
+4. `substitute`: The substitute that will replace the text that matches the pattern. `{value}` will be replaced by the value given to the exconman command.
+5. `replace`: This is optional. You can choose which line you are replacing. `line_above` will replace the entire line above the line that matched the pattern with the substitute. `line_below` does the same as `line_above` but for the line below. `matched_text` is the default behaviour, it only replaces the text that matched the pattern.
+6. `read_value_path`: This is optional. The value will be interpreted as a file path and the file's contents will be used as the value instead. The default is `false`.
+7. `multiple`: This is optional. If this setting is set to true, it will replace all matches instead of just the first one.
 
-Running `exconman dump` will print out all the settings and their values in JSON format:
-```
-{
-	"bspwm.window_gap": "10",
-	"bspwm.normal_border_color": "#333333",
-	"bspwm.focused_border_color": "#ffffff",
-}
-```
-You can also set a bunch of settings in bulk if you have a JSON file in the same format like above using `exconman load path/to/json/file.json`.
