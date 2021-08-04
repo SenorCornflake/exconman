@@ -442,3 +442,224 @@ pub fn set(name: String, value: String, config: &Option<Config>, registry: &Vec<
         _ => {}
     }
 }
+
+pub fn get(name: String, config: &Option<Config>, registry: &Vec<Setting>) {
+    let setting = get_setting(name, registry);
+
+    // TODO: Error message
+    if setting.is_none() {
+        return;
+    }
+
+    let setting = setting.unwrap();
+
+    // Open the file   
+    let file = std::fs::read_to_string(&util::expand_home(&setting.file));
+
+    if file.is_err() {
+        eprintln!(
+            "Error opening file {}\"{}\"{} for setting {}\"{}\"{}: {}{}{}",
+            util::color("green", "fg"),
+            setting.file,
+            util::color("white", "fg"),
+            util::color("green", "fg"),
+            setting.name,
+            util::color("white", "fg"),
+            util::color("red", "fg"),
+            file.unwrap_err(),
+            util::color("", "fg")
+        );
+        return;
+    }
+
+    let file = file.unwrap();
+    // Split file into lines
+    let file: Vec<&str> = file
+        .split("\n")
+        .collect();
+
+    let mut text: String = String::new();
+
+    match &setting.pattern {
+        Pattern::Line(pattern) => {
+            let rgx = Regex::new(&pattern);
+
+            if rgx.is_err() {
+                eprintln!(
+                    "Error occured while compiling regex for setting {}\"{}\"{}: {}{}{}",
+                    util::color("green", "fg"),
+                    setting.name,
+                    util::color("white", "fg"),
+                    util::color("red", "fg"),
+                    rgx.unwrap_err(),
+                    util::color("white", "fg"),
+                );
+                return;
+            }
+
+            let rgx = rgx.unwrap();
+
+            for i in 0..file.len() {
+                let line = file[i];
+
+                if rgx.is_match(line) {
+                    match &setting.replace {
+                        None => {
+                            text = file[i].to_string();
+                        }
+                        Some(replace) => {
+                            match replace {
+                                Replace::LineAbove => {
+                                    if i != 0 {
+                                        text = file[i - 1].to_string();
+                                    }
+                                }
+                                Replace::MatchedText => {
+                                    text = file[i].to_string();
+                                }
+                                Replace::LineBelow => {
+                                    if i != file.len() - 1 {
+                                        text = file[i + 1].to_string();
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if setting.multiple.is_none() || setting.multiple.unwrap() == false {
+                        break;
+                    }
+                }
+            }
+
+        }
+        Pattern::Region(region) => {
+            let mut region_start: Option<usize> = None;
+            let mut region_end: Option<usize> = None;
+            
+            let rgx_start = Regex::new(&region[0]);
+            let rgx_end = Regex::new(&region[1]);
+
+            if rgx_start.is_err() || rgx_end.is_err() {
+                eprintln!(
+                    "Error occured while compiling regex for setting {}\"{}\"{}: {}{}{}",
+                    util::color("green", "fg"),
+                    setting.name,
+                    util::color("white", "fg"),
+                    util::color("red", "fg"),
+                    rgx_start.unwrap_err(),
+                    util::color("white", "fg"),
+                );
+                return;
+            }
+
+            let rgx_start = rgx_start.unwrap();
+            let rgx_end = rgx_end.unwrap();
+
+            for i in 0..file.len() {
+                let line = file[i];
+                if rgx_start.is_match(line) {
+                    region_start = Some(i);
+
+                    if (setting.multiple.is_none() || setting.multiple.unwrap() == false) && region_end.is_some() {
+                        break;
+                    }
+                }
+                if rgx_end.is_match(line) {
+                    region_end = Some(i);
+
+                    if (setting.multiple.is_none() || setting.multiple.unwrap() == false) && region_start.is_some() {
+                        break;
+                    }
+                }
+            }
+
+            if region_start.is_none() || region_end.is_none() || region_start.unwrap() >= region_end.unwrap() {
+                return;
+            }
+
+            text = file[region_start.unwrap() + 1 .. region_end.unwrap()]
+                .join("\n");
+        }
+
+    }
+
+    // Now that we've extracted the text, extact the value from it.
+    let built_rgx = &setting.substitute;
+    let built_rgx = built_rgx.replace("\\", "\\\\");
+    let built_rgx = built_rgx.replace("^", "\\^");
+    let built_rgx = built_rgx.replace("$", "\\$");
+    let built_rgx = built_rgx.replace("|", "\\|");
+    let built_rgx = built_rgx.replace("?", "\\?");
+    let built_rgx = built_rgx.replace(".", "\\.");
+    let built_rgx = built_rgx.replace("*", "\\*");
+    let built_rgx = built_rgx.replace("(", "\\(");
+    let built_rgx = built_rgx.replace(")", "\\)");
+    let built_rgx = built_rgx.replace("{value}", "(.|\n)*"); // Match all characters, even new lines
+    let built_rgx = built_rgx.replace("+", "\\+");
+    let built_rgx = built_rgx.replace("{", "\\{");
+    let built_rgx = built_rgx.replace("[", "\\[");
+    let built_rgx = Regex::new(&built_rgx);
+    if built_rgx.is_err() {
+        eprintln!(
+            "Error occured while compiling auto generated regex for setting {}\"{}\"{}: {}{}{}",
+            util::color("green", "fg"),
+            setting.name,
+            util::color("white", "fg"),
+            util::color("red", "fg"),
+            built_rgx.unwrap_err(),
+            util::color("white", "fg"),
+        );
+        return;
+    }
+    let built_rgx = built_rgx.unwrap();
+
+    let start_of_text = built_rgx.find(&text);
+
+    if start_of_text.is_none() {
+        eprintln!(
+            "Error occurred while extracting the value for setting {}\"{}\"{}: Could not find value",
+            util::color("green", "fg"),
+            setting.name,
+            util::color("white", "fg"),
+        );
+        return;
+    }
+
+    let start_of_text = start_of_text
+        .unwrap()
+        .start();
+
+    let start_of_value = setting.substitute.find("{value}");
+    if start_of_value.is_none() {
+        eprintln!(
+            "Error occurred while extracting the value for setting {}\"{}\"{}: Could not find value",
+            util::color("green", "fg"),
+            setting.name,
+            util::color("white", "fg"),
+        );
+        return;
+    }
+    let start_of_value = start_of_value.unwrap();
+
+    let mut text: Vec<&str> = text
+        .split("")
+        .collect();
+
+    // Remove chars before the value
+    for i in 0..start_of_text + start_of_value + 1 {
+        text[i] = "";
+    }
+
+    let amount_of_chars_after_value = setting.substitute[start_of_value + "{value}".len()..].len();
+
+    // Remove chars after the value
+    for i in 0..amount_of_chars_after_value {
+        let end_of_text = text.len() - 1;
+        text[end_of_text - i] = "";
+    }
+
+    let text = text.join("");
+
+    println!("{}", text);
+}

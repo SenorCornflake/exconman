@@ -4,7 +4,7 @@
 		"file": "~/repos/exconman/lemon.txt",
 		"pattern": "lemon = .+",
 		"substitute": "lemon = {value}",
-		"replace": "line_below",
+		"replace": "matched_text",
 		"read_value_path": true,
 		"multiple": false
 	}

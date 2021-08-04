@@ -32,7 +32,7 @@ fn main() {
             functions::set(name, value, &config, &registry);
         }
         SubCommands::Get(Get { name }) => {
-
+            functions::get(name, &config, &registry);
         }
         SubCommands::Load(Load { path }) => {
 
