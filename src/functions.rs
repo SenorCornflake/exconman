@@ -672,7 +672,7 @@ pub fn get(name: String, print: bool, config: &Option<Config>, registry: &Vec<Se
         text[i] = "";
     }
 
-    let amount_of_chars_after_value = setting.substitute[start_of_value + "{value}".len()..].len();
+    let amount_of_chars_after_value = setting.substitute[start_of_value + "{value}".len()..].len() + 1;
 
     // Remove chars after the value
     for i in 0..amount_of_chars_after_value {

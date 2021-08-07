@@ -34,4 +34,3 @@ after it has found a match, it will replace whatever text was matched with the *
 5. `replace`: This is optional. You can choose which line you are replacing. `line_above` will replace the entire line above the line that matched the pattern with the substitute. `line_below` does the same as `line_above` but for the line below. `matched_text` is the default behaviour, it only replaces the text that matched the pattern.
 6. `read_value_path`: This is optional. The value will be interpreted as a file path and the file's contents will be used as the value instead. The default is `false`.
 7. `multiple`: This is optional. If this setting is set to true, it will replace all matches instead of just the first one.
-

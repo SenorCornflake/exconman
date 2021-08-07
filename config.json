@@ -1,5 +1,0 @@
-{
-	"placeholders": {
-		"home": "echo $HOME"
-	}
-}
