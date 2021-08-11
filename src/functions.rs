@@ -8,7 +8,7 @@ use crate::config::Config;
 
 // Get the config file, if it exists
 pub fn get_config() -> Option<Config> {
-    let config_metadata = std::fs::metadata(util::expand_home("~/.config/exconman/config.json"));
+    let config_metadata = std::fs::metadata(util::expand_env_vars("~/.config/exconman/config.json"));
 
     if config_metadata.is_ok() {
         let config_metadata = config_metadata.unwrap();
@@ -17,7 +17,7 @@ pub fn get_config() -> Option<Config> {
             eprintln!("Config path {}\"~/.config/exconman/config.json\"{} is a directory.", util::color("green", "fg"), util::color("white", "fg"));
             None
         } else {
-            let config = std::fs::read_to_string(&util::expand_home("~/.config/exconman/config.json"));
+            let config = std::fs::read_to_string(&util::expand_env_vars("~/.config/exconman/config.json"));
 
             if config.is_ok() {
 				let config: Result<Config, serde_json::Error> = serde_json::from_str(&config.unwrap());
@@ -49,8 +49,8 @@ pub fn get_registry(registry: Option<String>) -> Result<Vec<Setting>, ()> {
         Ok(registry)
     } else {
         // Decide which default registry path to use, either the file or the directory
-        let registry_file = util::expand_home("~/.config/exconman/registry.json");
-        let registry_dir = util::expand_home("~/.config/exconman/registry");
+        let registry_file = util::expand_env_vars("~/.config/exconman/registry.json");
+        let registry_dir = util::expand_env_vars("~/.config/exconman/registry");
         
         let file_results = std::fs::metadata(&registry_file);
         let dir_results = std::fs::metadata(&registry_dir);
@@ -235,7 +235,7 @@ pub fn run_hook(hook_name: String, hook_command: String) {
         }
     }
 
-    match std::fs::metadata(util::expand_home(&hook_command)) {
+    match std::fs::metadata(util::expand_env_vars(&hook_command)) {
         Err(_) => {
             run("command", &hook_name, &hook_command);
         },
@@ -276,7 +276,7 @@ pub fn set(name: String, value: String, config: &Option<Config>, registry: &Vec<
     let setting = setting.unwrap();
 
     // Open the file   
-    let file = std::fs::read_to_string(&util::expand_home(&setting.file));
+    let file = std::fs::read_to_string(&util::expand_env_vars(&setting.file));
 
     if file.is_err() {
         eprintln!(
@@ -303,7 +303,7 @@ pub fn set(name: String, value: String, config: &Option<Config>, registry: &Vec<
     let substitute: String;
 
     if setting.read_value_path.is_some() && setting.read_value_path.unwrap() == true {
-        let contents = std::fs::read_to_string(&util::expand_home(&value));
+        let contents = std::fs::read_to_string(&util::expand_env_vars(&value));
 
         if contents.is_err() {
             eprintln!(
@@ -433,7 +433,7 @@ pub fn set(name: String, value: String, config: &Option<Config>, registry: &Vec<
 
     let file = file.join("\n");
 
-    match std::fs::write(util::expand_home(&setting.file), file) {
+    match std::fs::write(util::expand_env_vars(&setting.file), file) {
         Err(error) => {
             eprintln!(
                 "Failed to write to {}\"{}\"{}: {}{}{}",
@@ -475,7 +475,7 @@ pub fn get(name: String, print: bool, config: &Option<Config>, registry: &Vec<Se
     let setting = setting.unwrap();
 
     // Open the file   
-    let file = std::fs::read_to_string(&util::expand_home(&setting.file));
+    let file = std::fs::read_to_string(&util::expand_env_vars(&setting.file));
 
     if file.is_err() {
         eprintln!(

@@ -1,8 +1,17 @@
 /// This file contains functions that assists development
 
+use shellexpand; 
 
-pub fn expand_home(path: &str) -> String {
-    path.replace("~", std::env::var("HOME").unwrap().as_str())
+pub fn expand_env_vars(string: &str) -> String {
+    let expanded = shellexpand::full(string);
+
+    if expanded.is_ok() {
+        return expanded
+            .unwrap()
+            .to_string();
+    }
+    
+    string.to_string()
 }
 
 pub fn color<'a>(color: &'a str, ground: &'a str) -> &'a str {
