@@ -1,0 +1,1 @@
+This was meant to be something great, a program that edits your configuration files for you instead of mantaining different versions of configs for different rices. I actually personally used it for a long time and it's kinda working but I don't want to write docs or mantain it. So here it stays for future reference or when I get a drive to continue it.
